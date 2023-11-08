@@ -1,4 +1,5 @@
-#pragma once
+#ifndef NNHNSW
+#define NNHNSW
 
 #include <cinttypes>
 #include <map>
@@ -9,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "../algorithm/distance.h"
-#include "../struct/data_struct.h"
+#include "../distance/distance.hpp"
+#include "data_struct.hpp"
 
 namespace nnhnsw
 {
@@ -43,7 +44,8 @@ template <typename Dimension_Type> class Index
         }
         this->distance_bound = distance_bound;
         this->max_connect = max_connect;
-        this->distance_calculation = get_distance_calculation_function(distance_type);
+        this->distance_calculation =
+            get_distance_calculation_function<Dimension_Type>(distance_type);
     }
 
     std::map<float, uint64_t> query(const std::vector<Dimension_Type> &query_vector, uint64_t topk)
@@ -54,7 +56,7 @@ template <typename Dimension_Type> class Index
             for (auto i = 0; i < this->vectors.size(); ++i)
             {
                 auto distance = this->distance_calculation(query_vector, this->vectors[i].vector);
-                result.insert(std::pair(distance, i));
+                result.insert(std::pair<float, uint64_t>(distance, i));
             }
             return result;
         }
@@ -64,7 +66,7 @@ template <typename Dimension_Type> class Index
             std::map<float, uint64_t> next_scanned;
             // 记录下一层中要扫描的簇
             std::map<float, uint64_t> scanning;
-            scanning.insert(std::pair(0, 0));
+            scanning.insert(std::pair<float, uint64_t>(0, 0));
             // 从最上层开始扫描
             for (auto layer_index = this->layers.size() - 1;; --layer_index)
             {
@@ -97,12 +99,12 @@ template <typename Dimension_Type> class Index
 
     void add(const std::vector<Dimension_Type> &vector)
     {
-        this->vectors.push_back(Vector(vector));
+        this->vectors.push_back(Vector<Dimension_Type>(vector));
         // 记录当前层中要扫描的簇
         std::map<float, uint64_t> next_scanned;
         // 记录下一层中要扫描的簇
         std::map<float, uint64_t> scanning;
-        scanning.insert(std::pair(0, 0));
+        scanning.insert(std::pair<float, uint64_t>(0, 0));
         // 从最上层开始扫描
         for (auto layer_index = this->layers.size() - 1;; --layer_index)
         {
@@ -116,6 +118,7 @@ template <typename Dimension_Type> class Index
                 for (auto vector_index = 0; vector_index < vectors_in_cluster.size();
                      ++vector_index)
                 {
+                    auto i = this->vectors;
                     float distance = this->distance_calculation(
                         vector, this->vectors[vectors_in_cluster[vector_index]].vector);
                     next_scanned.insert(std::make_pair(distance, vectors_in_cluster[vector_index]));
@@ -129,6 +132,12 @@ template <typename Dimension_Type> class Index
             }
         }
     }
+
+    void remove(const std::vector<Dimension_Type> &vector)
+    {
+    }
 };
 
 } // namespace nnhnsw
+
+#endif

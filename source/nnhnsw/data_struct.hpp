@@ -1,17 +1,20 @@
-#pragma once
+#ifndef DATA_STRUCT
+#define DATA_STRUCT
 
 #include <inttypes.h>
+#include <memory>
+#include <vector>
 
 // 向量
-template <class Dimension_Type> class Vector
+template <typename Dimension_Type> class Vector
 {
   private:
   public:
     std::vector<Dimension_Type> vector;
 
-    Vector(const std::vector<Dimension_Type> &vectors)
+    Vector(const std::vector<Dimension_Type> &vector)
     {
-        this->vector = vectors;
+        this->vector = vector;
     }
 };
 
@@ -45,10 +48,4 @@ class Layer
     }
 };
 
-// 距离定义
-enum class Distance_Type : uint64_t
-{
-    Euclidean2,
-    Inner_Product,
-    Cosine_Similarity,
-};
+#endif

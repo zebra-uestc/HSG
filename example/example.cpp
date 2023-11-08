@@ -5,8 +5,7 @@
 #include <memory>
 #include <vector>
 
-#include "bruteforce/bruteforce.h"
-#include "index/nnhnsw.h"
+#include "../source/bruteforce/bruteforce.hpp"
 
 // 每一“行”中，第一个数表示数据的维度dim，后面跟着的dim个数便是向量各维度的值。(注：fvecs中的f指float32)
 // 因此，一“行”表示的便是一个向量。
@@ -99,26 +98,26 @@ uint64_t verify(const std::pair<int32_t, std::vector<int32_t>> &result,
     auto query_result_iteration = query_result.begin();
     for (auto i = 0; i < result.first; ++i)
     {
-        if (result.second[i] == query_result_iteration.operator->()->second)
+        if (result.second[i] == query_result_iteration->second)
         {
             ++hit;
             ++query_result_iteration;
         }
     }
-    {
-        for (auto i = 0; i < result.second.size(); ++i)
-        {
-            std::cout << result.second[i] << "  ";
-        }
-        std::cout << std::endl;
-        auto query_result_iteration = query_result.begin();
-        for (auto i = 0; i < result.second.size(); ++i)
-        {
-            std::cout << query_result_iteration.operator->()->second << "  ";
-            ++query_result_iteration;
-        }
-        std::cout << std::endl;
-    }
+    // {
+    //     for (auto i = 0; i < result.second.size(); ++i)
+    //     {
+    //         std::cout << result.second[i] << "  ";
+    //     }
+    //     std::cout << std::endl;
+    //     auto query_result_iteration = query_result.begin();
+    //     for (auto i = 0; i < result.second.size(); ++i)
+    //     {
+    //         std::cout << query_result_iteration.operator->()->second << "  ";
+    //         ++query_result_iteration;
+    //     }
+    //     std::cout << std::endl;
+    // }
     return hit;
 }
 
@@ -129,34 +128,9 @@ int main(int argc, char **argv)
     auto result = load_result_from_ivecs(argv[3]);
     for (auto i = 0; i < query.size(); ++i)
     {
-        auto query_result = bruteforce::search(vectors, query[i], result[i].first);
+        auto query_result = bruteforce::search<float>(vectors, query[i], result[i].first);
         auto hit = verify(result[i], query_result);
         std::cout << "recall: " << (double)hit / result[i].first << std::endl;
     }
-    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
-    for (auto i = 0; i < query.size(); ++i)
-    {
-        auto query_result = index.query(query[i], result[i].first);
-        // auto hit = verify(result[i], query_result);
-        // std::cout << "recall: " << (double)hit / result[i].first << std::endl;
-    }
-    // {
-    //     std::unique_ptr<std::string> t1(new std::string("qwe"));
-    //     std::unique_ptr<std::string> &t2 = t1;
-    //     std::cout << *(t1.get()) << std::endl << *(t2.get()) << std::endl;
-    //     t2.get()->push_back('q');
-    //     std::cout << *(t1.get()) << std::endl << *(t2.get()) << std::endl;
-    //     t2.release();
-    //     std::cout << *(t1.get()) << std::endl;
-    // }
-    // {
-    //     std::string *t1 = new std::string("qwe");
-    //     std::string *t2 = t1;
-    //     std::cout << *t1 << std::endl << *t2 << std::endl;
-    //     t2->push_back('q');
-    //     std::cout << *t1 << std::endl << *t2 << std::endl;
-    //     delete t2;
-    //     std::cout << *t1 << std::endl;
-    // }
     return 0;
 }
