@@ -1,14 +1,14 @@
-add_library(nnhnsw "")
+add_library(nnhnsw STATIC)
 target_sources(nnhnsw
-  PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/data_struct.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/data_struct.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.hpp
-  PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.hpp
-  )
+        PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/data_struct.h
+        ${CMAKE_CURRENT_LIST_DIR}/data_struct.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.h
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.h
+)
 target_include_directories(nnhnsw
-  PUBLIC
-      ${CMAKE_CURRENT_LIST_DIR}
-  )
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}
+)
 target_link_libraries(nnhnsw distance)

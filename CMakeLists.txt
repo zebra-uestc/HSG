@@ -1,31 +1,31 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_COMPILER /usr/bin/clang++)
-
 project(
-    vector-index
-    VERSION 1.0.0.0
-    DESCRIPTION "This project is uesd to test vector index algorithm. "
-    LANGUAGES CXX
+        vector-index
+        VERSION 1.0.0.0
+        DESCRIPTION "This project is used to test vector index algorithm. "
+        LANGUAGES CXX
 )
 
 add_subdirectory(source)
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
 
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CXX_FLAGS "-std=c++20 -fpic" CACHE STRING "" FORCE)
 
-        set(CMAKE_CXX_FLAGS_RELEASE "-std=c++20 -fpic -DNDEBUG -O3 -flto" CACHE STRING "" FORCE)
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
 
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3 -flto" CACHE STRING "" FORCE)
 
-        set(CMAKE_CXX_FLAGS_DEBUG "-std=c++20 -fpic -g -gstabs -O0 -Wall -Wextra -Wpedantic" CACHE STRING "" FORCE)
+    elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
 
-    endif()
+        set(CMAKE_CXX_FLAGS_DEBUG "-g -gstabs -O0 -Wall -Wextra -Wpedantic" CACHE STRING "" FORCE)
+
+    endif ()
 
     message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
     message(STATUS "CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
@@ -39,4 +39,4 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_subdirectory(example)
 
-endif()
+endif ()

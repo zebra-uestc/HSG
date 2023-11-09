@@ -1,11 +1,11 @@
 add_library(distance "")
 target_sources(distance
-  PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/distance.cpp
-  PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}/distance.hpp
-  )
+        PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/distance.cpp
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/distance.h
+)
 target_include_directories(distance
-  PUBLIC
-      ${CMAKE_CURRENT_LIST_DIR}
-  )
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}
+)

@@ -1,8 +1,8 @@
 #ifndef DISTANCE_TYPE
 #define DISTANCE_TYPE
 
-#include <inttypes.h>
-#include <math.h>
+#include <cinttypes>
+#include <cmath>
 #include <vector>
 
 // 距离定义
@@ -16,8 +16,7 @@ enum class Distance_Type : uint64_t
 namespace euclidean2
 {
 template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1,
-               const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
     float square_distance = 0;
     for (size_t i = 0; i < vector1.size(); ++i)
@@ -32,8 +31,7 @@ float distance(const std::vector<Dimension_Type> &vector1,
 namespace inner_product
 {
 template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1,
-               const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
     float product = 0;
     for (size_t i = 0; i < vector1.size(); ++i)
@@ -47,8 +45,7 @@ float distance(const std::vector<Dimension_Type> &vector1,
 namespace cosine_similarity
 {
 template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1,
-               const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
     float product = 0;
     float square_sum1 = 0;
