@@ -93,16 +93,13 @@ class Insert_Result
 {
   private:
   public:
-    // 插入向量与结果向量的距离
-    float distance;
-    // 结果向量所的在簇在其所在层的偏移量
+    // 结果向量所在的簇在其所在层的偏移量
     uint64_t cluster_offset;
     // 结果向量在簇中的偏移量
     uint64_t offset_in_cluster;
 
-    Insert_Result(float distance, uint64_t cluster_offset, uint64_t offset_in_cluster)
+    Insert_Result(uint64_t cluster_offset, uint64_t offset_in_cluster)
     {
-        this->distance = distance;
         this->cluster_offset = cluster_offset;
         this->offset_in_cluster = offset_in_cluster;
     }

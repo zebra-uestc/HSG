@@ -5,6 +5,7 @@
 #include <memory.h>
 #include <memory>
 #include <queue>
+#include <set>
 #include <stack>
 #include <stdexcept>
 #include <string>
@@ -81,6 +82,8 @@ template <typename Dimension_Type> class Index
             std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> next_round;
             result.emplace(0, 0);
             // 从最上层开始扫描
+            // todo
+            // 优化查询过程
             for (auto layer_iteration = this->layers.rbegin(); layer_iteration != this->layers.rend();
                  ++layer_iteration)
             {
@@ -133,39 +136,44 @@ template <typename Dimension_Type> class Index
         }
         this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
         // 记录应该被插入向量连接的邻居向量
-        std::priority_queue<Insert_Result, std::vector<Insert_Result>, Compare_By_Distance> neighbors;
+        std::multimap<float, Insert_Result> neighbors;
         // 记录当前层中要扫描的簇
-        std::priority_queue<Insert_Result, std::vector<Insert_Result>, Compare_By_Distance> next_round;
-        neighbors.emplace(0, 0);
+        std::multimap<float, Insert_Result> next_round;
+        neighbors.insert(std::make_pair(0, Insert_Result(0, 0)));
         // 从最上层开始扫描
+        // todo
+        // 优化查询过程
         for (auto layer_index = this->layers.rbegin(); layer_index != this->layers.rend(); ++layer_index)
         {
             const Layer &layer = *layer_index;
-            while (!neighbors.empty())
+            for (auto neighbor_iteration = neighbors.begin(); neighbor_iteration != neighbors.end();
+                 ++neighbor_iteration)
             {
-                Cluster &cluster = *(layer.clusters[neighbors.top().cluster_offset].get());
+                const Cluster &cluster = *(layer.clusters[neighbor_iteration->second.cluster_offset].get());
                 for (auto vector_offset = 0; vector_offset < cluster.vectors.size(); ++vector_offset)
                 {
                     float distance = this->distance_calculation(
                         inserted_vector, this->vectors[cluster.vectors[vector_offset].data_offset].vector);
                     if (next_round.size() < this->max_connect)
                     {
-                        next_round.emplace(distance, neighbors.top().cluster_offset, vector_offset);
+                        next_round.insert(std::make_pair(
+                            distance, Insert_Result(cluster.vectors[vector_offset].cluster_offset, vector_offset)));
                     }
                     else
                     {
-                        if (distance < next_round.top().distance)
+                        if (next_round.lower_bound(distance) != next_round.end())
                         {
-                            next_round.emplace(distance, neighbors.top().cluster_offset, vector_offset);
-                            next_round.pop();
+                            next_round.insert(std::make_pair(
+                                distance, Insert_Result(cluster.vectors[vector_offset].cluster_offset, vector_offset)));
+                            next_round.erase(std::prev(next_round.end()));
                         }
                     }
                 }
-                neighbors.pop();
             }
             std::swap(neighbors, next_round);
         }
         // todo
+        // 插入向量
     }
 
     void remove(const std::vector<Dimension_Type> &vector)
