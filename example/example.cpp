@@ -1,8 +1,6 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <memory.h>
-#include <memory>
 #include <vector>
 
 #include "bruteforce.h"

@@ -23,7 +23,7 @@ template <typename Dimension_Type> class Index
     // 向量原始数据
     std::vector<Vector<Dimension_Type>> vectors;
     // 自底向上存放每一层
-    std::vector<std::unique_ptr<Layer>> layers;
+    std::vector<Layer> layers;
     // 每个向量的最大邻居向量个数
     uint64_t max_connect{};
     // 最大距离倍数
@@ -77,22 +77,21 @@ template <typename Dimension_Type> class Index
         }
         else
         {
-            // 记录当前层中要扫描的簇
+            // 记录下一层中要扫描的簇
             std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> next_round;
             result.emplace(0, 0);
             // 从最上层开始扫描
-            for (auto layer_index = this->layers.rbegin(); layer_index != this->layers.rend(); ++layer_index)
+            for (auto layer_iteration = this->layers.rbegin(); layer_iteration != this->layers.rend();
+                 ++layer_iteration)
             {
-                const Layer &layer = *((*layer_index).get());
+                const Layer &layer = *(layer_iteration);
                 while (!result.empty())
                 {
-                    Cluster &cluster = *(layer.clusters[next_round.top().offset].get());
-                    auto vectors_in_cluster = cluster.vectors;
-                    for (auto &vector_in_cluster : vectors_in_cluster)
+                    Cluster &cluster = *(layer.clusters[result.top().offset].get());
+                    for (auto &vector_in_cluster : cluster.vectors)
                     {
                         float distance = this->distance_calculation(
                             query_vector, this->vectors[vector_in_cluster.data_offset].vector);
-                        result.emplace(distance, vector_in_cluster.cluster_offset);
                         if (next_round.size() < topk)
                         {
                             next_round.emplace(distance, vector_in_cluster.cluster_offset);
@@ -114,56 +113,57 @@ template <typename Dimension_Type> class Index
         return result;
     }
 
-    void insert(const std::vector<Dimension_Type> &insert_vector)
+    void insert(const std::vector<Dimension_Type> &inserted_vector)
     {
-        uint64_t vector_offset = this->vectors.size();
-        this->vectors.push_back(Vector<Dimension_Type>(insert_vector));
-        if (vector_offset == 0)
+        // 插入向量在原始数据中的偏移量
+        uint64_t inserted_vector_offset = this->vectors.size();
+        if (inserted_vector_offset == 0)
         {
-            this->layers.push_back(std::make_unique<Layer>());
-            this->layers[0]->clusters.push_back(std::make_unique<Cluster>());
-            this->layers[0]->clusters[0]->vectors.push_back(Vector_In_Cluster());
+            this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
+            this->layers.push_back(Layer());
+            this->layers[0].clusters.push_back(std::make_unique<Cluster>());
+            this->layers[0].clusters[0]->vectors.push_back(
+                Vector_In_Cluster(inserted_vector_offset, inserted_vector_offset, this->max_connect));
             return;
         }
-        if (insert_vector.size() != this->vectors[0].vector.size())
+        if (inserted_vector.size() != this->vectors[0].vector.size())
         {
             throw std::invalid_argument("The dimension of insert vector is not "
                                         "equality with vectors in index. ");
         }
+        this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
         // 记录应该被插入向量连接的邻居向量
-        std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> neighbor;
+        std::priority_queue<Insert_Result, std::vector<Insert_Result>, Compare_By_Distance> neighbors;
         // 记录当前层中要扫描的簇
-        std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> next_round;
-        neighbor.emplace(0, 0);
+        std::priority_queue<Insert_Result, std::vector<Insert_Result>, Compare_By_Distance> next_round;
+        neighbors.emplace(0, 0);
         // 从最上层开始扫描
         for (auto layer_index = this->layers.rbegin(); layer_index != this->layers.rend(); ++layer_index)
         {
-            const Layer &layer = *((*layer_index).get());
-            while (!neighbor.empty())
+            const Layer &layer = *layer_index;
+            while (!neighbors.empty())
             {
-                Cluster &cluster = *(layer.clusters[next_round.top().offset].get());
-                auto vectors_in_cluster = cluster.vectors;
-                for (auto &vector_in_cluster : vectors_in_cluster)
+                Cluster &cluster = *(layer.clusters[neighbors.top().cluster_offset].get());
+                for (auto vector_offset = 0; vector_offset < cluster.vectors.size(); ++vector_offset)
                 {
-                    float distance =
-                        this->distance_calculation(insert_vector, this->vectors[vector_in_cluster.data_offset].vector);
-                    neighbor.emplace(distance, vector_in_cluster.cluster_offset);
+                    float distance = this->distance_calculation(
+                        inserted_vector, this->vectors[cluster.vectors[vector_offset].data_offset].vector);
                     if (next_round.size() < this->max_connect)
                     {
-                        next_round.emplace(distance, vector_in_cluster.cluster_offset);
+                        next_round.emplace(distance, neighbors.top().cluster_offset, vector_offset);
                     }
                     else
                     {
                         if (distance < next_round.top().distance)
                         {
-                            next_round.emplace(distance, vector_in_cluster.cluster_offset);
+                            next_round.emplace(distance, neighbors.top().cluster_offset, vector_offset);
                             next_round.pop();
                         }
                     }
                 }
-                neighbor.pop();
+                neighbors.pop();
             }
-            std::swap(neighbor, next_round);
+            std::swap(neighbors, next_round);
         }
         // todo
     }

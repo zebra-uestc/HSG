@@ -18,6 +18,8 @@ namespace euclidean2
 template <typename Dimension_Type>
 float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
+    // todo
+    // 并行化
     float square_distance = 0;
     for (size_t i = 0; i < vector1.size(); ++i)
     {
@@ -33,6 +35,8 @@ namespace inner_product
 template <typename Dimension_Type>
 float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
+    // todo
+    // 并行化
     float product = 0;
     for (size_t i = 0; i < vector1.size(); ++i)
     {
@@ -47,6 +51,8 @@ namespace cosine_similarity
 template <typename Dimension_Type>
 float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
+    // todo
+    // 并行化
     float product = 0;
     float square_sum1 = 0;
     float square_sum2 = 0;

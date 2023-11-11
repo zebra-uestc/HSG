@@ -29,11 +29,14 @@ class Vector_In_Cluster
     // 向量对应的下一层中的簇的偏移量
     // 最下一层为向量在原始数据的偏移量
     uint64_t cluster_offset;
+    // 邻居向量在簇中的偏移量
+    std::vector<uint64_t> neighbors;
 
-    Vector_In_Cluster()
+    explicit Vector_In_Cluster(uint64_t data_offset, uint64_t cluster_offset, uint64_t max_connect)
     {
-        this->cluster_offset = 0;
-        this->data_offset = 0;
+        this->cluster_offset = data_offset;
+        this->data_offset = cluster_offset;
+        this->neighbors = std::vector<uint64_t>(max_connect);
     }
 };
 
@@ -74,6 +77,8 @@ class Query_Result
   public:
     // 查询向量与结果向量的距离
     float distance;
+    // 结果向量指向的簇在其所在层的偏移量
+    // 或者
     // 结果向量在原始数据中的偏移量
     uint64_t offset;
 
@@ -81,6 +86,25 @@ class Query_Result
     {
         this->distance = distance;
         this->offset = offset;
+    }
+};
+
+class Insert_Result
+{
+  private:
+  public:
+    // 插入向量与结果向量的距离
+    float distance;
+    // 结果向量所的在簇在其所在层的偏移量
+    uint64_t cluster_offset;
+    // 结果向量在簇中的偏移量
+    uint64_t offset_in_cluster;
+
+    Insert_Result(float distance, uint64_t cluster_offset, uint64_t offset_in_cluster)
+    {
+        this->distance = distance;
+        this->cluster_offset = cluster_offset;
+        this->offset_in_cluster = offset_in_cluster;
     }
 };
 
