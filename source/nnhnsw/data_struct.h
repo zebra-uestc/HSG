@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -31,17 +32,17 @@ class Vector_In_Cluster
     // 向量对应的下一层中的簇的偏移量
     // 最下一层为向量在原始数据的偏移量
     uint64_t cluster_offset;
-    // 指向的邻居向量在簇中的偏移量
-    std::map<float, uint64_t> point_to;
-    // 指向该向量的邻居向量在簇中的偏移量
-    std::unordered_set<uint64_t> be_pointed;
+    // 指向的邻居向量
+    std::map<float, std::weak_ptr<Vector_In_Cluster>> point_to;
+    // 指向该向量的邻居向量
+    std::vector<std::weak_ptr<Vector_In_Cluster>> be_pointed;
 
-    explicit Vector_In_Cluster(uint64_t data_offset, uint64_t cluster_offset)
+    Vector_In_Cluster(uint64_t data_offset, uint64_t cluster_offset)
     {
         this->cluster_offset = data_offset;
         this->data_offset = cluster_offset;
-        this->point_to = std::map<float, uint64_t>();
-        this->be_pointed = std::unordered_set<uint64_t>();
+        this->point_to = std::map<float, std::weak_ptr<Vector_In_Cluster>>();
+        this->be_pointed = std::vector<std::weak_ptr<Vector_In_Cluster>>();
     }
 };
 
@@ -51,21 +52,49 @@ class Cluster
   private:
   public:
     // 簇中的向量
-    std::vector<Vector_In_Cluster> vectors;
-    // 该簇中被选出的向量在簇中的偏移量和在上一层中所属的簇以及在簇中的偏移量
-    std::map<uint64_t, std::pair<uint64_t, uint64_t>> selected_vectors_offset;
+    std::vector<std::shared_ptr<Vector_In_Cluster>> vectors;
+    // 该簇中被选出的向量在原始数据的偏移量和在上一层的向量
+    std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> selected_vectors;
 
     Cluster()
     {
-        this->vectors = std::vector<Vector_In_Cluster>();
-        this->selected_vectors_offset = std::map<uint64_t, std::pair<uint64_t, uint64_t>>();
+        this->vectors = std::vector<std::shared_ptr<Vector_In_Cluster>>();
+        this->selected_vectors = std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>>();
     }
 
     // 计算当前簇的连通性
     // 如果不连通则返回所有的簇
-    // 如果连通返回空的数组
     std::vector<std::unique_ptr<Cluster>> calculate_clusters()
     {
+        uint64_t hit = 0;
+        std::vector<std::unique_ptr<Cluster>> result;
+        for (auto vector_iteration = this->vectors.begin();
+             vector_iteration != this->vectors.end() && hit != this->vectors.size(); ++vector_iteration)
+        {
+            if (*vector_iteration != nullptr)
+            {
+                std::unique_ptr<Cluster> temporary_cluster = std::make_unique<Cluster>();
+                temporary_cluster->vectors.push_back(*vector_iteration);
+                for (auto neighbor_iteration = vector_iteration->get()->point_to.begin();
+                     neighbor_iteration != vector_iteration->get()->point_to.end(); ++neighbor_iteration)
+                {
+                    temporary_cluster->vectors.push_back(neighbor_iteration->second.lock());
+                }
+                for (auto neighbor_iteration = vector_iteration->get()->be_pointed.begin();
+                     neighbor_iteration != vector_iteration->get()->be_pointed.end(); ++neighbor_iteration)
+                {
+                    temporary_cluster->vectors.push_back(neighbor_iteration->lock());
+                }
+                auto selected = this->selected_vectors.find(vector_iteration->get()->data_offset);
+                if (selected != this->selected_vectors.end())
+                {
+                    temporary_cluster->selected_vectors.insert(std::make_pair(
+                        vector_iteration->get()->data_offset, std::weak_ptr<Vector_In_Cluster>(*vector_iteration)));
+                }
+                vector_iteration->reset();
+                result.push_back(std::move(temporary_cluster));
+            }
+        }
     }
 };
 
@@ -127,7 +156,7 @@ class Layer
     void divide_a_cluster(uint64_t cluster_number)
     {
         auto new_clusters = this->clusters[cluster_number]->calculate_clusters();
-        if (!new_clusters.empty())
+        if (new_clusters.size() != 1)
         {
             std::swap(this->clusters[cluster_number], new_clusters[0]);
             this->clusters.resize(this->clusters.size() + new_clusters.size() - 1);
