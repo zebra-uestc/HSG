@@ -5,7 +5,7 @@
 #include <map>
 #include <vector>
 
-#include "../distance/distance.h"
+#include "distance.h"
 
 namespace bruteforce
 {

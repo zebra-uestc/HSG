@@ -1,4 +1,4 @@
-add_library(bruteforce "")
+add_library(bruteforce STATIC)
 target_sources(bruteforce
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/bruteforce.cpp
@@ -9,4 +9,4 @@ target_include_directories(bruteforce
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}
 )
-target_link_libraries(bruteforce PRIVATE distance)
+target_link_libraries(bruteforce PUBLIC distance)

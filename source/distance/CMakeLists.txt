@@ -1,4 +1,4 @@
-add_library(distance "")
+add_library(distance STATIC)
 target_sources(distance
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/distance.cpp
