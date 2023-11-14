@@ -152,9 +152,26 @@ template <typename Dimension_Type> class Index
         // 插入向量
         while (!every_layer_neighbors.empty())
         {
-
+            auto base_cluster = every_layer_neighbors.top().begin()->second.lock()->cluster;
+            auto base_distance = every_layer_neighbors.top().begin()->first;
+            uint64_t distance_rank = 1;
+            std::shared_ptr<Vector_In_Cluster> new_vector =
+                std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset, base_cluster);
+            // todo
+            // 把新的向量加入到距离最短的向量所在的簇里
+            // 将新的向量指向最短的向量
+            // 计算就的向量是否指向新的向量
+            // 如果指向判断是否有被断开的向量
+            // 如果有则判断簇是否被分割
             for (auto &neighbor : every_layer_neighbors.top())
             {
+                if (base_distance * distance_rank * this->distance_bound < neighbor.first)
+                {
+                    break;
+                }
+                if (base_cluster.lock() != neighbor.second.lock()->cluster.lock())
+                {
+                }
             }
             every_layer_neighbors.pop();
         }
