@@ -126,8 +126,23 @@ class Layer
     }
 
     // 合并两个簇
-    void merge_two_clusters(uint64_t base_cluster, uint64_t merged_cluster)
+    void merge_two_clusters(uint64_t target_cluster, uint64_t merged_cluster)
     {
+        // 移动被合并的簇中的向量到目标簇中
+        this->clusters[target_cluster]->vectors.insert(this->clusters[target_cluster]->vectors.begin(),
+                                                       this->clusters[merged_cluster]->vectors.begin(),
+                                                       this->clusters[merged_cluster]->vectors.end());
+        // 移动被合并的簇中被选出的代表向量到目标簇中且更改这些向量的“represented_cluster_offset”的值
+        for (auto selected_vector_iteration = this->clusters[merged_cluster]->selected_vectors.begin();
+             selected_vector_iteration != this->clusters[merged_cluster]->selected_vectors.end();
+             ++selected_vector_iteration)
+        {
+            selected_vector_iteration->second.lock()->represented_cluster_offset = target_cluster;
+            this->clusters[target_cluster]->selected_vectors.insert(
+                std::make_pair(selected_vector_iteration->first, selected_vector_iteration->second));
+        }
+        // 删除簇
+        this->clusters.erase(this->clusters.begin() + merged_cluster);
     }
 
     // 分裂一个簇
