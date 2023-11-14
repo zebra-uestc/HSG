@@ -1,11 +1,15 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <queue>
+#include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "bruteforce.h"
-#include "nnhnsw.h"
+// #include "nnhnsw.h"
 
 // 每一“行”中，第一个数表示数据的维度dim，后面跟着的dim个数便是向量各维度的值。(注：fvecs中的f指float32)
 // 因此，一“行”表示的便是一个向量。
@@ -120,38 +124,39 @@ uint64_t verify(const std::pair<int32_t, std::vector<int32_t>> &result, const st
     return hit;
 }
 
-uint64_t verify_index(std::pair<int, std::vector<int>> result,
-                      std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> &query_result)
-{
-    uint64_t hit = 0;
-    for (auto i = 0; i < result.first; ++i)
-    {
-        if (result.second[i] == query_result.top().offset)
-        {
-            ++hit;
-            query_result.pop();
-        }
-    }
-    return hit;
-}
+// uint64_t verify_index(std::pair<int, std::vector<int>> result,
+//                       std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance>
+//                       &query_result)
+//{
+//     uint64_t hit = 0;
+//     for (auto i = 0; i < result.first; ++i)
+//     {
+//         if (result.second[i] == query_result.top().offset)
+//         {
+//             ++hit;
+//             query_result.pop();
+//         }
+//     }
+//     return hit;
+// }
 
 int main(int argc, char **argv)
 {
-    auto vectors = load_vector_from_fvecs(argv[1]);
-    auto query = load_vector_from_fvecs(argv[2]);
-    auto result = load_result_from_ivecs(argv[3]);
-    for (auto i = 0; i < query.size(); ++i)
-    {
-        auto query_result = bruteforce::search<float>(vectors, query[i], result[i].first);
-        auto hit = verify(result[i], query_result);
-        std::cout << "recall: " << (double)hit / result[i].first << std::endl;
-    }
-    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
-    for (auto i = 0; i < query.size(); ++i)
-    {
-        auto query_result = index.query(query[i], result[i].first);
-        auto hit = verify_index(result[i], query_result);
-        std::cout << "recall: " << (double)hit / result[i].first << std::endl;
-    }
+    //    auto vectors = load_vector_from_fvecs(argv[1]);
+    //    auto query = load_vector_from_fvecs(argv[2]);
+    //    auto result = load_result_from_ivecs(argv[3]);
+    //    for (auto i = 0; i < query.size(); ++i)
+    //    {
+    //        auto query_result = bruteforce::search<float>(vectors, query[i], result[i].first);
+    //        auto hit = verify(result[i], query_result);
+    //        std::cout << "recall: " << (double)hit / result[i].first << std::endl;
+    //    }
+    //    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
+    //    for (auto i = 0; i < query.size(); ++i)
+    //    {
+    //        auto query_result = index.query(query[i], result[i].first);
+    //        auto hit = verify_index(result[i], query_result);
+    //        std::cout << "recall: " << (double)hit / result[i].first << std::endl;
+    //    }
     return 0;
 }
