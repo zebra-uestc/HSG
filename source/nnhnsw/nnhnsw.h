@@ -115,7 +115,7 @@ template <typename Dimension_Type> class Index
         return result;
     }
 
-    void insert(const std::vector<Dimension_Type> &inserted_vector)
+    void insert(const std::vector<Dimension_Type> &inserted_vector, uint64_t layer_number = 0)
     {
         // 插入向量在原始数据中的偏移量
         uint64_t inserted_vector_offset = this->vectors.size();

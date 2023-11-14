@@ -28,21 +28,21 @@ class Vector_In_Cluster
   private:
   public:
     // 向量在原始数据的偏移量
-    uint64_t data_offset;
+    uint64_t global_offset;
     // 向量对应的下一层中的簇的偏移量
     // 最下一层为向量在原始数据的偏移量
-    uint64_t cluster_offset;
+    uint64_t represented_cluster_offset;
     // 指向的邻居向量
-    std::map<float, std::weak_ptr<Vector_In_Cluster>> point_to;
+    std::multimap<float, std::weak_ptr<Vector_In_Cluster>> out;
     // 指向该向量的邻居向量
-    std::vector<std::weak_ptr<Vector_In_Cluster>> be_pointed;
+    std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> in;
 
-    Vector_In_Cluster(uint64_t data_offset, uint64_t cluster_offset)
+    Vector_In_Cluster(uint64_t global_offset, uint64_t represented_cluster_offset)
     {
-        this->cluster_offset = data_offset;
-        this->data_offset = cluster_offset;
-        this->point_to = std::map<float, std::weak_ptr<Vector_In_Cluster>>();
-        this->be_pointed = std::vector<std::weak_ptr<Vector_In_Cluster>>();
+        this->represented_cluster_offset = represented_cluster_offset;
+        this->global_offset = global_offset;
+        this->out = std::multimap<float, std::weak_ptr<Vector_In_Cluster>>();
+        this->in = std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>>();
     }
 };
 
@@ -67,34 +67,48 @@ class Cluster
     std::vector<std::unique_ptr<Cluster>> calculate_clusters()
     {
         uint64_t hit = 0;
-        std::vector<std::unique_ptr<Cluster>> result;
+        std::vector<std::unique_ptr<Cluster>> new_clusters;
+        // key：向量的全局偏移量
+        // value：向量在第几个新的簇中
+        // value用于在将新簇划分完成之后将现有的被选择的向量分配到新的簇中
+        std::unordered_map<uint64_t, uint64_t> flag;
+        uint64_t new_cluster_number = 0;
         for (auto vector_iteration = this->vectors.begin();
              vector_iteration != this->vectors.end() && hit != this->vectors.size(); ++vector_iteration)
         {
             if (*vector_iteration != nullptr)
             {
+
+                flag.insert(std::make_pair(vector_iteration->get()->global_offset, new_cluster_number));
                 std::unique_ptr<Cluster> temporary_cluster = std::make_unique<Cluster>();
                 temporary_cluster->vectors.push_back(*vector_iteration);
-                for (auto neighbor_iteration = vector_iteration->get()->point_to.begin();
-                     neighbor_iteration != vector_iteration->get()->point_to.end(); ++neighbor_iteration)
+                for (auto &out_iteration : vector_iteration->get()->out)
                 {
-                    temporary_cluster->vectors.push_back(neighbor_iteration->second.lock());
+                    if (!flag.contains(out_iteration.second.lock()->global_offset))
+                    {
+                        flag.insert(std::make_pair(out_iteration.second.lock()->global_offset, new_cluster_number));
+                        temporary_cluster->vectors.push_back(out_iteration.second.lock());
+                    }
                 }
-                for (auto neighbor_iteration = vector_iteration->get()->be_pointed.begin();
-                     neighbor_iteration != vector_iteration->get()->be_pointed.end(); ++neighbor_iteration)
+                for (auto &in_iteration : vector_iteration->get()->in)
                 {
-                    temporary_cluster->vectors.push_back(neighbor_iteration->lock());
-                }
-                auto selected = this->selected_vectors.find(vector_iteration->get()->data_offset);
-                if (selected != this->selected_vectors.end())
-                {
-                    temporary_cluster->selected_vectors.insert(std::make_pair(
-                        vector_iteration->get()->data_offset, std::weak_ptr<Vector_In_Cluster>(*vector_iteration)));
+                    if (!flag.contains(in_iteration.first))
+                    {
+                        flag.insert(std::make_pair(in_iteration.first, new_cluster_number));
+                        temporary_cluster->vectors.push_back(in_iteration.second.lock());
+                    }
                 }
                 vector_iteration->reset();
-                result.push_back(std::move(temporary_cluster));
+                new_clusters.push_back(std::move(temporary_cluster));
+                ++new_cluster_number;
             }
         }
+        for (auto &selected_vector : this->selected_vectors)
+        {
+            new_clusters[flag.find(selected_vector.first)->second]->selected_vectors.insert(
+                std::make_pair(selected_vector.first, selected_vector.second));
+        }
+        return new_clusters;
     }
 };
 
@@ -114,58 +128,33 @@ class Layer
     // 合并两个簇
     void merge_two_clusters(uint64_t base_cluster, uint64_t merged_cluster)
     {
-        auto base_cluster_size = this->clusters[base_cluster]->vectors.size();
-        std::unordered_set<uint64_t> temporary;
-        for (auto vector_iteration = this->clusters[merged_cluster]->vectors.begin();
-             vector_iteration != this->clusters[merged_cluster]->vectors.end(); ++vector_iteration)
-        {
-            // 被合并的簇中的每个向量指向的向量在簇中所在的偏移量增加目标簇中向量的个数
-            for (auto point_to_iteration = vector_iteration->point_to.begin();
-                 point_to_iteration != vector_iteration->point_to.end(); ++point_to_iteration)
-            {
-                point_to_iteration->second += base_cluster_size;
-            }
-
-            // 被合并的簇中的每个向量被指向的向量在簇中所在的偏移量增加目标簇中向量的个数
-            for (auto be_pointed_iteration = vector_iteration->be_pointed.begin();
-                 be_pointed_iteration != vector_iteration->be_pointed.end(); ++be_pointed_iteration)
-            {
-                temporary.insert(*be_pointed_iteration + base_cluster_size);
-            }
-            std::swap(vector_iteration->be_pointed, temporary);
-            temporary.clear();
-        }
-        this->clusters[base_cluster]->vectors.insert(this->clusters[base_cluster]->vectors.end(),
-                                                     this->clusters[merged_cluster]->vectors.begin(),
-                                                     this->clusters[merged_cluster]->vectors.end());
-        for (auto selected_vector_in_merged_cluster_iteration =
-                 this->clusters[merged_cluster]->selected_vectors_offset.begin();
-             selected_vector_in_merged_cluster_iteration !=
-             this->clusters[merged_cluster]->selected_vectors_offset.end();
-             ++selected_vector_in_merged_cluster_iteration)
-        {
-            this->clusters[base_cluster]->selected_vectors_offset.insert(
-                std::make_pair(selected_vector_in_merged_cluster_iteration->first + base_cluster_size,
-                               std::make_pair(selected_vector_in_merged_cluster_iteration->second.first,
-                                              selected_vector_in_merged_cluster_iteration->second.second)));
-        }
-        this->clusters.erase(this->clusters.begin() + merged_cluster);
     }
 
     // 分裂一个簇
-    void divide_a_cluster(uint64_t cluster_number)
+    // 新的簇中可能没有被选出的向量在上一层中
+    // 将这些簇的编号返回
+    std::vector<uint64_t> divide_a_cluster(uint64_t cluster_number)
     {
         auto new_clusters = this->clusters[cluster_number]->calculate_clusters();
         if (new_clusters.size() != 1)
         {
+            std::vector<uint64_t> no_selected_clusters;
+            if (new_clusters[0]->selected_vectors.empty())
+            {
+                no_selected_clusters.push_back(cluster_number);
+            }
             std::swap(this->clusters[cluster_number], new_clusters[0]);
-            this->clusters.resize(this->clusters.size() + new_clusters.size() - 1);
             for (auto new_cluster_iteration = new_clusters.begin() + 1; new_cluster_iteration != new_clusters.end();
                  ++new_cluster_iteration)
             {
+                if ((*new_cluster_iteration)->selected_vectors.empty())
+                {
+                    no_selected_clusters.push_back(this->clusters.size());
+                }
                 this->clusters.push_back(std::move(*new_cluster_iteration));
             }
         }
+        return {};
     }
 };
 
