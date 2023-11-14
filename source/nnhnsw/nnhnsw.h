@@ -100,6 +100,66 @@ template <typename Dimension_Type> class Index
         return nearest_neighbors;
     }
 
+    void insert(const std::vector<Dimension_Type> &inserted_vector, uint64_t which_layer)
+    {
+        // 插入向量在原始数据中的偏移量
+        uint64_t inserted_vector_global_offset = this->vectors.size();
+        if (inserted_vector_global_offset == 0)
+        {
+            this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
+            this->layers.push_back(std::make_unique<Layer>());
+            this->layers[0]->clusters.push_back(std::make_unique<Cluster>());
+            this->layers[0]->clusters[0]->vectors.insert(std::make_pair(
+                inserted_vector_global_offset, std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset)));
+            return;
+        }
+        if (inserted_vector.size() != this->vectors[0].vector.size())
+        {
+            throw std::invalid_argument("The dimension of insert vector is not "
+                                        "equality with vectors in index. ");
+        }
+        this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
+        // 记录被插入向量每一层中距离最近的max_connect个邻居向量
+        std::stack<std::multimap<float, std::weak_ptr<Vector_In_Cluster>>> every_layer_neighbors;
+        every_layer_neighbors.push(
+            this->nearest_neighbors(inserted_vector, this->layers[0]->clusters[0]->vectors.begin()->second));
+        // 逐层扫描
+        // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
+        // 所以不需要实际的层和簇
+        // 直接通过上一层中返回的结果即可进行计算
+        // 因为最上层已经提前计算，所以计数的基数为1
+        for (auto i = 1 + which_layer; i < this->layers.size(); ++i)
+        {
+            // 一层中有好多的簇
+            // 每个簇之间是不连通的
+            // 所以要进行多次计算
+            // 最后汇总计算结果
+            std::multimap<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
+            for (auto &start_vector_iteration : every_layer_neighbors.top())
+            {
+                auto temporary_nearest_neighbor =
+                    this->nearest_neighbors(inserted_vector, start_vector_iteration.second.lock()->lower_layer);
+                for (auto &neighbor_iteration : one_layer_neighbors)
+                {
+                    one_layer_neighbors.insert(neighbor_iteration);
+                }
+                auto last_neighbor = one_layer_neighbors.begin();
+                std::advance(last_neighbor, this->max_connect);
+                one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
+            }
+            every_layer_neighbors.push(std::move(one_layer_neighbors));
+        }
+        // 插入向量
+        while (!every_layer_neighbors.empty())
+        {
+
+            for (auto &neighbor : every_layer_neighbors.top())
+            {
+            }
+            every_layer_neighbors.pop();
+        }
+    }
+
   public:
     Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type,
           const uint64_t max_connect, const uint64_t distance_bound)
@@ -114,7 +174,7 @@ template <typename Dimension_Type> class Index
             this->vectors.resize(vectors.size(), Vector<Dimension_Type>(vectors[0]));
             for (auto i = 0; i < vectors.size(); ++i)
             {
-                this->insert(vectors[i]);
+                this->insert(vectors[i], 0);
             }
         }
         this->distance_bound = distance_bound;
@@ -184,101 +244,7 @@ template <typename Dimension_Type> class Index
 
     void insert(const std::vector<Dimension_Type> &inserted_vector)
     {
-        // 插入向量在原始数据中的偏移量
-        uint64_t inserted_vector_global_offset = this->vectors.size();
-        if (inserted_vector_global_offset == 0)
-        {
-            this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-            this->layers.push_back(std::make_unique<Layer>());
-            this->layers[0]->clusters.push_back(std::make_unique<Cluster>());
-            this->layers[0]->clusters[0]->vectors.insert(std::make_pair(
-                inserted_vector_global_offset, std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset)));
-            return;
-        }
-        if (inserted_vector.size() != this->vectors[0].vector.size())
-        {
-            throw std::invalid_argument("The dimension of insert vector is not "
-                                        "equality with vectors in index. ");
-        }
-        this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-        // 记录被插入向量每一层中距离最近的max_connect个邻居向量
-        std::stack<std::multimap<float, std::weak_ptr<Vector_In_Cluster>>> every_layer_neighbors;
-        every_layer_neighbors.push(
-            this->nearest_neighbors(inserted_vector, this->layers[0]->clusters[0]->vectors.begin()->second));
-        // 逐层扫描
-        // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
-        // 所以不需要实际的层和簇
-        // 直接通过上一层中返回的结果即可进行计算
-        while (!every_layer_neighbors.top().begin()->second.lock()->lower_layer.expired())
-        {
-            // 一层中有好多的簇
-            // 每个簇之间是不连通的
-            // 所以要进行多次计算
-            // 最后汇总计算结果
-            std::multimap<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
-            for (auto &start_vector_iteration : every_layer_neighbors.top())
-            {
-                auto temporary_nearest_neighbor =
-                    this->nearest_neighbors(inserted_vector, start_vector_iteration.second.lock()->lower_layer);
-                for (auto &neighbor_iteration : one_layer_neighbors)
-                {
-                    one_layer_neighbors.insert(neighbor_iteration);
-                }
-                auto last_neighbor = one_layer_neighbors.begin();
-                std::advance(last_neighbor, this->max_connect);
-                one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
-            }
-            every_layer_neighbors.push(std::move(one_layer_neighbors));
-        }
-        // 插入向量
-        {
-            auto layer_number = 0;
-            for (auto every_layer_neighbors_iteration = every_layer_neighbors.rbegin();
-                 every_layer_neighbors_iteration != every_layer_neighbors.rend();
-                 ++every_layer_neighbors_iteration, ++layer_number)
-            {
-                float shortest_distance = every_layer_neighbors_iteration->begin()->first;
-                auto base_cluster_number = neighbors.begin()->second.cluster_offset;
-                auto distance_rank = 1;
-                for (auto neighbor_iteration = every_layer_neighbors_iteration->begin();
-                     neighbor_iteration != every_layer_neighbors_iteration->end();
-                     ++neighbor_iteration, ++distance_rank)
-                {
-                    // 以与最近的向量的距离为基准距离
-                    // 如果基准距离*系数*距离排名 < 距离
-                    // 则不将该向量及其后面的向量视为邻居
-                    if (shortest_distance * this->distance_bound * distance_rank < neighbor_iteration->first)
-                    {
-                        break;
-                    }
-                    auto cluster_number = neighbor_iteration->second.cluster_offset;
-                    // 如果邻居向量在不同的簇中，则合并簇
-                    if (base_cluster_number != cluster_number)
-                    {
-                        for (auto upper_layer_vector_iteration =
-                                 this->layers[layer_number]->clusters[cluster_number]->selected_vectors_offset.begin();
-                             upper_layer_vector_iteration !=
-                             this->layers[layer_number]->clusters[cluster_number]->selected_vectors_offset.end();
-                             ++upper_layer_vector_iteration)
-                        {
-                            this->layers[layer_number + 1]
-                                ->clusters[upper_layer_vector_iteration->first]
-                                ->vectors[upper_layer_vector_iteration->second]
-                                .cluster_offset += base_cluster_number;
-                        }
-                        this->layers[layer_number]->merge_two_clusters(base_cluster_number, cluster_number);
-                    }
-                    else
-                    {
-                        // 添加
-                        this->layers[layer_number]->clusters[base_cluster_number]->vectors.push_back(
-                            Vector_In_Cluster(inserted_vector_global_offset, inserted_vector_global_offset));
-                        this->layers[layer_number]->clusters[base_cluster_number]->vectors.rbegin()->point_to.push_back(
-                            neighbor_iteration->second.offset_in_cluster);
-                    }
-                }
-            }
-        }
+        this->insert(inserted_vector, 0);
     }
 
     void remove(const std::vector<Dimension_Type> &vector)
