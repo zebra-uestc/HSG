@@ -24,16 +24,21 @@ template <typename Dimension_Type> class Index
   private:
     // 向量原始数据
     std::vector<Vector<Dimension_Type>> vectors;
+
     // 自底向上存放每一层
     std::vector<std::unique_ptr<Layer>> layers;
+
     // 每个向量的最大邻居向量个数
     uint64_t max_connect{};
+
     // 最大距离倍数
     uint64_t distance_bound{};
+
     // 距离计算
     float (*distance_calculation)(const std::vector<Dimension_Type> &vector1,
                                   const std::vector<Dimension_Type> &vector2);
-    // 从开始向量查询开始向量所在簇中距离最近的max_connect个向量
+
+    // 从开始向量查询开始向量所在簇中距离最近的topk个向量
     std::multimap<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(
         const std::vector<Dimension_Type> &query_vector, const std::weak_ptr<Vector_In_Cluster> &start,
         uint64_t topk = 0)
@@ -52,25 +57,27 @@ template <typename Dimension_Type> class Index
         std::multimap<float, std::weak_ptr<Vector_In_Cluster>> waiting_vectors;
         // 优先队列
         std::multimap<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors;
-        waiting_vectors.insert(std::make_pair(
-            this->distance_calculation(query_vector, this->vectors[start.lock()->global_offset].vector), start));
+        waiting_vectors.emplace(
+            this->distance_calculation(query_vector, this->vectors[start.lock()->global_offset].vector), start);
         while (!waiting_vectors.empty())
         {
-            auto processing = waiting_vectors.begin();
-            flags.insert(processing->second.lock()->global_offset);
-            recent_distance.push(processing->first);
-            sorted_recent_distance.insert(processing->first);
+            auto processing = *(waiting_vectors.begin());
+            auto processing_vector = processing.second.lock();
+            waiting_vectors.erase(waiting_vectors.begin());
+            flags.emplace(processing_vector->global_offset);
+            recent_distance.push(processing.first);
+            sorted_recent_distance.insert(processing.first);
             if (nearest_neighbors.size() < topk)
             {
-                nearest_neighbors.insert(std::make_pair(processing->first, processing->second));
+                nearest_neighbors.emplace(processing.first, processing.second);
             }
             else
             {
                 sorted_recent_distance.erase(recent_distance.front());
                 recent_distance.pop();
-                if (nearest_neighbors.upper_bound(processing->first) != nearest_neighbors.end())
+                if (nearest_neighbors.upper_bound(processing.first) != nearest_neighbors.end())
                 {
-                    nearest_neighbors.insert(std::make_pair(processing->first, processing->second));
+                    nearest_neighbors.emplace(processing.first, processing.second);
                     nearest_neighbors.erase(nearest_neighbors.rbegin().base());
                 }
                 auto median = sorted_recent_distance.begin();
@@ -80,27 +87,27 @@ template <typename Dimension_Type> class Index
                     break;
                 }
             }
-            for (auto &out_iteration : processing->second.lock()->out)
+            for (auto &out_iterator : processing_vector->out)
             {
-                if (flags.insert(out_iteration.second.lock()->global_offset).second)
+                auto temporary_vector_pointer = out_iterator.second.lock();
+                if (flags.insert(temporary_vector_pointer->global_offset).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
+                    waiting_vectors.emplace(
                         this->distance_calculation(query_vector,
-                                                   this->vectors[out_iteration.second.lock()->global_offset].vector),
-                        out_iteration.second));
+                                                   this->vectors[temporary_vector_pointer->global_offset].vector),
+                        out_iterator.second);
                 }
             }
-            for (auto &in_iteration : processing->second.lock()->in)
+            for (auto &in_iterator : processing_vector->in)
             {
-                if (flags.insert(in_iteration.first).second)
+                if (flags.insert(in_iterator.first).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
+                    waiting_vectors.emplace(
                         this->distance_calculation(query_vector,
-                                                   this->vectors[in_iteration.second.lock()->global_offset].vector),
-                        in_iteration.second));
+                                                   this->vectors[in_iterator.second.lock()->global_offset].vector),
+                        in_iterator.second);
                 }
             }
-            waiting_vectors.erase(waiting_vectors.begin());
         }
         return nearest_neighbors;
     }
