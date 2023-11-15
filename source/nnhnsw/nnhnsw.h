@@ -35,8 +35,13 @@ template <typename Dimension_Type> class Index
                                   const std::vector<Dimension_Type> &vector2);
     // 从开始向量查询开始向量所在簇中距离最近的max_connect个向量
     std::multimap<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(
-        const std::vector<Distance_Type> &query_vector, const std::weak_ptr<Vector_In_Cluster> &start)
+        const std::vector<Dimension_Type> &query_vector, const std::weak_ptr<Vector_In_Cluster> &start,
+        uint64_t topk = 0)
     {
+        if (topk == 0)
+        {
+            topk = this->max_connect;
+        }
         // 标记簇中的向量是否被遍历过
         std::unordered_set<uint64_t> flags;
         // 如果最近遍历的向量的距离的中位数大于优先队列的最大值，提前结束
@@ -55,7 +60,7 @@ template <typename Dimension_Type> class Index
             flags.insert(processing->second.lock()->global_offset);
             recent_distance.push(processing->first);
             sorted_recent_distance.insert(processing->first);
-            if (nearest_neighbors.size() < this->max_connect)
+            if (nearest_neighbors.size() < topk)
             {
                 nearest_neighbors.insert(std::make_pair(processing->first, processing->second));
             }
@@ -179,7 +184,10 @@ template <typename Dimension_Type> class Index
                         neighbor.second.lock()->out.rbegin()->second.lock()->in.erase(
                             neighbor.second.lock()->global_offset);
                         neighbor.second.lock()->out.erase(neighbor.second.lock()->out.rbegin().base());
-                        this->layers[layer_number]->divide_a_cluster(neighbor.second.lock()->cluster);
+                        // todo
+                        // 为需要在上一层中添加向量的簇在上一层中插入向量
+                        auto need_selected_clusters =
+                            this->layers[layer_number]->divide_a_cluster(neighbor.second.lock()->cluster);
                     }
                     neighbor.second.lock()->out.insert(std::make_pair(neighbor.first, new_vector));
                 }
@@ -222,8 +230,7 @@ template <typename Dimension_Type> class Index
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
     }
 
-    std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> query(
-        const std::vector<Dimension_Type> &query_vector, uint64_t topk)
+    std::map<float, uint64_t> query(const std::vector<Dimension_Type> &query_vector, uint64_t topk)
     {
         if (this->vectors.empty())
         {
@@ -234,8 +241,53 @@ template <typename Dimension_Type> class Index
             throw std::invalid_argument("The dimension of query vector is not "
                                         "equality with vectors in index. ");
         }
-        std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> result;
-
+        std::map<float, uint64_t> result;
+        // 如果索引中的向量数量小于topk
+        // 直接暴力搜索返回排序后的全部结果
+        if (this->vectors.size() < topk)
+        {
+            for (uint64_t global_offset = 0; global_offset < this->vectors.size(); ++global_offset)
+            {
+                result.emplace(this->distance_calculation(query_vector, this->vectors[global_offset].vector),
+                               global_offset);
+            }
+        }
+        else
+        {
+            // 记录被插入向量每一层中距离最近的max_connect个邻居向量
+            std::multimap<float, std::weak_ptr<Vector_In_Cluster>> every_layer_neighbors =
+                this->nearest_neighbors(query_vector, this->layers[0]->clusters[0]->vectors.begin()->second);
+            // 逐层扫描
+            // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
+            // 所以不需要实际的层和簇
+            // 直接通过上一层中返回的结果即可进行计算
+            for (auto i = 1; i < this->layers.size(); ++i)
+            {
+                // 一层中有好多的簇
+                // 每个簇之间是不连通的
+                // 所以要进行多次计算
+                // 最后汇总计算结果
+                std::multimap<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
+                for (auto &start_vector_iteration : every_layer_neighbors)
+                {
+                    auto temporary_nearest_neighbor =
+                        this->nearest_neighbors(query_vector, start_vector_iteration.second.lock()->lower_layer);
+                    for (auto &neighbor_iteration : one_layer_neighbors)
+                    {
+                        one_layer_neighbors.insert(neighbor_iteration);
+                    }
+                    auto last_neighbor = one_layer_neighbors.begin();
+                    std::advance(last_neighbor, this->max_connect);
+                    one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
+                }
+                every_layer_neighbors.clear();
+                std::swap(every_layer_neighbors, one_layer_neighbors);
+            }
+            for (auto &nearest_vector_iteration : every_layer_neighbors)
+            {
+                result.emplace(nearest_vector_iteration.first, nearest_vector_iteration.second.lock()->global_offset);
+            }
+        }
         return result;
     }
 
