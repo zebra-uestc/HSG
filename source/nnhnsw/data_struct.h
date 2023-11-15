@@ -10,6 +10,9 @@
 #include <unordered_set>
 #include <vector>
 
+class Cluster;
+class Layer;
+
 // 向量
 template <typename Dimension_Type> class Vector
 {
@@ -23,7 +26,6 @@ template <typename Dimension_Type> class Vector
     }
 };
 
-class Cluster;
 // 簇中的向量
 class Vector_In_Cluster
 {
@@ -54,13 +56,16 @@ class Cluster
 {
   private:
   public:
+    // 该簇所在的层
+    std::weak_ptr<Layer> layer;
     // 簇中的向量
     std::unordered_map<uint64_t, std::shared_ptr<Vector_In_Cluster>> vectors;
     // 该簇中被选出的向量在原始数据的偏移量
     std::unordered_set<uint64_t> selected_vectors;
 
-    Cluster()
+    explicit Cluster(const std::weak_ptr<Layer> &layer)
     {
+        this->layer = layer;
         this->vectors = std::unordered_map<uint64_t, std::shared_ptr<Vector_In_Cluster>>();
         this->selected_vectors = std::unordered_set<uint64_t>();
     }
@@ -74,39 +79,39 @@ class Cluster
         // value：向量在第几个新的簇中
         std::unordered_map<uint64_t, uint64_t> flag;
         uint64_t new_cluster_number = 0;
-        for (auto &vector_iteration : this->vectors)
+        for (auto &vector_iterator : this->vectors)
         {
-            if (!flag.contains(vector_iteration.first))
+            if (!flag.contains(vector_iterator.first))
             {
                 ++hit;
-                flag.insert(std::make_pair(vector_iteration.first, new_cluster_number));
-                std::shared_ptr<Cluster> temporary_cluster = std::make_shared<Cluster>();
-                vector_iteration.second->cluster = temporary_cluster;
-                temporary_cluster->vectors.insert(std::make_pair(vector_iteration.first, vector_iteration.second));
+                flag.emplace(vector_iterator.first, new_cluster_number);
+                std::shared_ptr<Cluster> temporary_cluster = std::make_shared<Cluster>(this->layer);
+                vector_iterator.second->cluster = temporary_cluster;
+                temporary_cluster->vectors.emplace(vector_iterator.first, vector_iterator.second);
                 std::queue<uint64_t> waiting_vectors;
-                waiting_vectors.push(vector_iteration.first);
+                waiting_vectors.push(vector_iterator.first);
                 while (!waiting_vectors.empty())
                 {
                     uint64_t neighbor_iteration = waiting_vectors.front();
                     waiting_vectors.pop();
-                    for (auto &out_iteration : this->vectors.find(neighbor_iteration)->second->out)
+                    for (auto &out_iterator : this->vectors.find(neighbor_iteration)->second->out)
                     {
-                        if (flag.insert(std::make_pair(out_iteration.second.lock()->global_offset, new_cluster_number))
-                                .second)
+                        std::shared_ptr<Vector_In_Cluster> temporary_vector_pointer = out_iterator.second.lock();
+                        if (flag.emplace(temporary_vector_pointer->global_offset, new_cluster_number).second)
                         {
                             ++hit;
-                            out_iteration.second.lock()->cluster = temporary_cluster;
-                            temporary_cluster->vectors.insert(
-                                std::make_pair(out_iteration.second.lock()->global_offset, out_iteration.second));
+                            temporary_vector_pointer->cluster = temporary_cluster;
+                            temporary_cluster->vectors.emplace(temporary_vector_pointer->global_offset,
+                                                               temporary_vector_pointer);
                         }
                     }
                     for (auto &in_iteration : this->vectors.find(neighbor_iteration)->second->in)
                     {
-                        if (flag.insert(std::make_pair(in_iteration.first, new_cluster_number)).second)
+                        if (flag.emplace(in_iteration.first, new_cluster_number).second)
                         {
                             ++hit;
                             in_iteration.second.lock()->cluster = temporary_cluster;
-                            temporary_cluster->vectors.insert(std::make_pair(in_iteration.first, in_iteration.second));
+                            temporary_cluster->vectors.emplace(in_iteration.first, in_iteration.second);
                         }
                     }
                 }
@@ -142,23 +147,26 @@ class Layer
     // 合并两个簇
     void merge_two_clusters(const std::weak_ptr<Cluster> &target_cluster, const std::weak_ptr<Cluster> &merged_cluster)
     {
+        std::shared_ptr<Cluster> temporary_target_cluster_pointer = target_cluster.lock();
+        std::shared_ptr<Cluster> temporary_merged_cluster_pointer = merged_cluster.lock();
         // 移动被合并的簇中的向量到目标簇中
-        for (auto &merged_cluster_vector : merged_cluster.lock()->vectors)
+        for (auto &merged_cluster_vector : temporary_merged_cluster_pointer->vectors)
         {
             merged_cluster_vector.second->cluster = target_cluster;
-            target_cluster.lock()->vectors.insert(merged_cluster_vector);
+            temporary_target_cluster_pointer->vectors.insert(merged_cluster_vector);
         }
         // 移动被合并的簇中被选出的代表向量到目标簇中
-        for (auto &merged_cluster_selected_vector : merged_cluster.lock()->selected_vectors)
+        for (auto &merged_cluster_selected_vector : temporary_merged_cluster_pointer->selected_vectors)
         {
-            target_cluster.lock()->selected_vectors.insert(merged_cluster_selected_vector);
+            temporary_target_cluster_pointer->selected_vectors.insert(merged_cluster_selected_vector);
         }
         // 删除簇
-        for (auto i = this->clusters.begin(); i != this->clusters.end(); ++i)
+        for (auto cluster_iterator = this->clusters.begin(); cluster_iterator != this->clusters.end();
+             ++cluster_iterator)
         {
-            if (*i == merged_cluster.lock())
+            if (*cluster_iterator == temporary_merged_cluster_pointer)
             {
-                this->clusters.erase(i);
+                this->clusters.erase(cluster_iterator);
                 break;
             }
         }
@@ -167,51 +175,32 @@ class Layer
     // 分裂一个簇
     // 新的簇中可能没有被选出的向量在上一层中
     // 将这些簇的编号返回
-    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(std::weak_ptr<Cluster> &cluster)
+    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(const std::weak_ptr<Cluster> &cluster)
     {
-        auto new_clusters = cluster.lock()->calculate_clusters();
+        std::shared_ptr<Cluster> temporary_divided_cluster = cluster.lock();
+        auto new_clusters = temporary_divided_cluster->calculate_clusters();
         std::vector<std::weak_ptr<Cluster>> no_selected_clusters;
         if (new_clusters[0]->selected_vectors.empty())
         {
             no_selected_clusters.push_back(new_clusters[0]);
         }
-        cluster.lock() = new_clusters[0];
-        for (auto new_cluster_iteration = new_clusters.begin() + 1; new_cluster_iteration != new_clusters.end();
-             ++new_cluster_iteration)
+        for (auto &cluster_iterator : this->clusters)
         {
-            if ((*new_cluster_iteration)->selected_vectors.empty())
+            if (cluster_iterator == temporary_divided_cluster)
             {
-                no_selected_clusters.push_back(*new_cluster_iteration);
+                cluster_iterator = new_clusters[0];
+                break;
             }
-            this->clusters.push_back(*new_cluster_iteration);
+        }
+        for (auto new_cluster_iterator = new_clusters.begin() + 1; new_cluster_iterator != new_clusters.end();
+             ++new_cluster_iterator)
+        {
+            if ((*new_cluster_iterator)->selected_vectors.empty())
+            {
+                no_selected_clusters.push_back(*new_cluster_iterator);
+            }
+            this->clusters.push_back(*new_cluster_iterator);
         }
         return no_selected_clusters;
-    }
-};
-
-class Query_Result
-{
-  private:
-  public:
-    // 查询向量与结果向量的距离
-    float distance;
-    // 结果向量指向的簇在其所在层的偏移量
-    // 或者
-    // 结果向量在原始数据中的偏移量
-    uint64_t offset;
-
-    Query_Result(float distance, uint64_t offset)
-    {
-        this->distance = distance;
-        this->offset = offset;
-    }
-};
-
-// 自定义仿函数
-struct Compare_By_Distance
-{
-    bool operator()(const Query_Result &result1, const Query_Result &result2)
-    {
-        return result1.distance < result2.distance;
     }
 };

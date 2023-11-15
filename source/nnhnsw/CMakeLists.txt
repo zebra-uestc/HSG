@@ -1,9 +1,8 @@
 add_library(nnhnsw STATIC)
+set_target_properties(nnhnsw PROPERTIES LINKER_LANGUAGE CXX)
 target_sources(nnhnsw
         PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/data_struct.h
-        ${CMAKE_CURRENT_LIST_DIR}/data_struct.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.cpp
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/nnhnsw.h
 )

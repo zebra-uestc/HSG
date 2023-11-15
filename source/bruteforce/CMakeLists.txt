@@ -1,7 +1,6 @@
 add_library(bruteforce STATIC)
+set_target_properties(bruteforce PROPERTIES LINKER_LANGUAGE CXX)
 target_sources(bruteforce
-        PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/bruteforce.cpp
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/bruteforce.h
 )
