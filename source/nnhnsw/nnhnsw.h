@@ -150,30 +150,53 @@ template <typename Dimension_Type> class Index
             every_layer_neighbors.push(std::move(one_layer_neighbors));
         }
         // 插入向量
+        uint64_t layer_number = which_layer;
         while (!every_layer_neighbors.empty())
         {
+            bool insert_to_upper_layer = false;
             auto base_cluster = every_layer_neighbors.top().begin()->second.lock()->cluster;
             auto base_distance = every_layer_neighbors.top().begin()->first;
             uint64_t distance_rank = 1;
             std::shared_ptr<Vector_In_Cluster> new_vector =
                 std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset, base_cluster);
-            // todo
             // 把新的向量加入到距离最短的向量所在的簇里
-            // 将新的向量指向最短的向量
-            // 计算就的向量是否指向新的向量
-            // 如果指向判断是否有被断开的向量
-            // 如果有则判断簇是否被分割
+            base_cluster.lock()->vectors.insert(std::make_pair(inserted_vector_global_offset, new_vector));
             for (auto &neighbor : every_layer_neighbors.top())
             {
                 if (base_distance * distance_rank * this->distance_bound < neighbor.first)
                 {
                     break;
                 }
+                // 将新的向量指向邻居向量
+                new_vector->out.insert(std::make_pair(neighbor.first, neighbor.second));
+                // 在邻居向量中记录指向自己的新向量
+                neighbor.second.lock()->in.insert(std::make_pair(inserted_vector_global_offset, new_vector));
+                // 计算旧的向量是否指向新的向量
+                if (neighbor.second.lock()->out.upper_bound(neighbor.first) != neighbor.second.lock()->out.end())
+                {
+                    if (this->max_connect == neighbor.second.lock()->out.size())
+                    {
+                        neighbor.second.lock()->out.rbegin()->second.lock()->in.erase(
+                            neighbor.second.lock()->global_offset);
+                        neighbor.second.lock()->out.erase(neighbor.second.lock()->out.rbegin().base());
+                        this->layers[layer_number]->divide_a_cluster(neighbor.second.lock()->cluster);
+                    }
+                    neighbor.second.lock()->out.insert(std::make_pair(neighbor.first, new_vector));
+                }
                 if (base_cluster.lock() != neighbor.second.lock()->cluster.lock())
                 {
+                    this->layers[layer_number]->merge_two_clusters(new_vector->cluster,
+                                                                   neighbor.second.lock()->cluster);
+                    insert_to_upper_layer = true;
                 }
+                ++distance_rank;
+            }
+            if (!insert_to_upper_layer)
+            {
+                break;
             }
             every_layer_neighbors.pop();
+            ++layer_number;
         }
     }
 
@@ -212,50 +235,7 @@ template <typename Dimension_Type> class Index
                                         "equality with vectors in index. ");
         }
         std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> result;
-        if (this->vectors.size() <= topk)
-        {
-            for (auto i = 0; i < this->vectors.size(); ++i)
-            {
-                auto distance = this->distance_calculation(query_vector, this->vectors[i].vector);
-                result.push(Query_Result(distance, i));
-            }
-        }
-        else
-        {
-            // 记录下一层中要扫描的簇
-            std::priority_queue<Query_Result, std::vector<Query_Result>, Compare_By_Distance> next_round;
-            result.emplace(0, 0);
-            // 从最上层开始扫描
-            // todo
-            // 优化查询过程
-            for (auto layer_iteration = this->layers.rbegin(); layer_iteration != this->layers.rend();
-                 ++layer_iteration)
-            {
-                while (!result.empty())
-                {
-                    Cluster &cluster = *(layer_iteration.clusters[result.top().offset].get());
-                    for (auto &vector_in_cluster : cluster.vectors)
-                    {
-                        float distance = this->distance_calculation(
-                            query_vector, this->vectors[vector_in_cluster->global_offset].vector);
-                        if (next_round.size() < topk)
-                        {
-                            next_round.emplace(distance, vector_in_cluster->represented_cluster_offset);
-                        }
-                        else
-                        {
-                            if (distance < next_round.top().distance)
-                            {
-                                next_round.emplace(distance, vector_in_cluster->represented_cluster_offset);
-                                next_round.pop();
-                            }
-                        }
-                    }
-                    result.pop();
-                }
-                std::swap(result, next_round);
-            }
-        }
+
         return result;
     }
 
@@ -264,9 +244,9 @@ template <typename Dimension_Type> class Index
         this->insert(inserted_vector, 0);
     }
 
-    void remove(const std::vector<Dimension_Type> &vector)
-    {
-    }
+    //    void remove(const std::vector<Dimension_Type> &vector)
+    //    {
+    //    }
 };
 
 } // namespace nnhnsw

@@ -167,15 +167,15 @@ class Layer
     // 分裂一个簇
     // 新的簇中可能没有被选出的向量在上一层中
     // 将这些簇的编号返回
-    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(uint64_t cluster_number)
+    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(std::weak_ptr<Cluster> &cluster)
     {
-        auto new_clusters = this->clusters[cluster_number]->calculate_clusters();
+        auto new_clusters = cluster.lock()->calculate_clusters();
         std::vector<std::weak_ptr<Cluster>> no_selected_clusters;
         if (new_clusters[0]->selected_vectors.empty())
         {
             no_selected_clusters.push_back(new_clusters[0]);
         }
-        std::swap(this->clusters[cluster_number], new_clusters[0]);
+        cluster.lock() = new_clusters[0];
         for (auto new_cluster_iteration = new_clusters.begin() + 1; new_cluster_iteration != new_clusters.end();
              ++new_cluster_iteration)
         {
