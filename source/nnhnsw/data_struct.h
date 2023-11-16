@@ -33,7 +33,7 @@ class Vector_In_Cluster
   public:
     // 向量在原始数据的偏移量
     uint64_t global_offset;
-    // 向量对应的下一层中向量
+    // 向量对应的下一层中的向量
     std::weak_ptr<Vector_In_Cluster> lower_layer;
     // 指向自己所在的簇
     std::weak_ptr<Cluster> cluster;
