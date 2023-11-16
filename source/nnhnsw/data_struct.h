@@ -42,10 +42,9 @@ class Vector_In_Cluster
     // 指向该向量的邻居向量
     std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> in;
 
-    explicit Vector_In_Cluster(const uint64_t global_offset, const std::weak_ptr<Cluster> &cluster)
+    explicit Vector_In_Cluster(const uint64_t global_offset)
     {
         this->global_offset = global_offset;
-        this->cluster = cluster;
         this->out = std::multimap<float, std::weak_ptr<Vector_In_Cluster>>();
         this->in = std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>>();
     }
@@ -138,6 +137,10 @@ class Layer
   public:
     // 每层中的多个簇
     std::vector<std::shared_ptr<Cluster>> clusters;
+    // 上一层
+    std::weak_ptr<Layer> upper_layer;
+    // 下一层
+    std::weak_ptr<Layer> lower_layer;
 
     Layer()
     {

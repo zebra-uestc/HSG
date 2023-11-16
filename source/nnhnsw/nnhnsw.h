@@ -41,11 +41,11 @@ template <typename Dimension_Type> class Index
     // 从开始向量查询开始向量所在簇中距离最近的topk个向量
     std::multimap<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(
         const std::vector<Dimension_Type> &query_vector, const std::weak_ptr<Vector_In_Cluster> &start,
-        uint64_t topk = 0)
+        uint64_t top_k = 0)
     {
-        if (topk == 0)
+        if (top_k == 0)
         {
-            topk = this->max_connect;
+            top_k = this->max_connect;
         }
         // 标记簇中的向量是否被遍历过
         std::unordered_set<uint64_t> flags;
@@ -67,7 +67,7 @@ template <typename Dimension_Type> class Index
             flags.emplace(processing_vector->global_offset);
             recent_distance.push(processing.first);
             sorted_recent_distance.insert(processing.first);
-            if (nearest_neighbors.size() < topk)
+            if (nearest_neighbors.size() < top_k)
             {
                 nearest_neighbors.emplace(processing.first, processing.second);
             }
@@ -112,30 +112,24 @@ template <typename Dimension_Type> class Index
         return nearest_neighbors;
     }
 
-    void insert(const std::vector<Dimension_Type> &inserted_vector, const std::weak_ptr<Layer> &target_layer)
+    void insert(const std::shared_ptr<Vector_In_Cluster> &new_vector, const std::weak_ptr<Layer> &target_layer)
     {
-        // 插入向量在原始数据中的偏移量
-        uint64_t inserted_vector_global_offset = this->vectors.size();
-        if (inserted_vector_global_offset == 0)
+        if (target_layer.expired())
         {
-            this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-            this->layers.push_back(std::make_shared<Layer>());
-            this->layers[0]->clusters.push_back(std::make_shared<Cluster>(this->layers[0]));
-            this->layers[0]->clusters[0]->vectors.emplace(
-                inserted_vector_global_offset,
-                std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset, this->layers[0]->clusters[0]));
+            auto new_layer = std::make_shared<Layer>();
+            auto new_cluster = std::make_shared<Cluster>(new_layer);
+            new_layer->lower_layer = *(this->layers.rbegin());
+            (*(this->layers.rbegin()))->upper_layer = new_layer;
+            this->layers.push_back(new_layer);
+            new_cluster->vectors.emplace(new_vector->global_offset, new_vector);
+            new_vector->cluster = new_cluster;
+            new_layer->clusters.push_back(std::move(new_cluster));
             return;
         }
-        if (inserted_vector.size() != this->vectors[0].vector.size())
-        {
-            throw std::invalid_argument("The dimension of insert vector is not "
-                                        "equality with vectors in index. ");
-        }
-        this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
         // 记录被插入向量每一层中距离最近的max_connect个邻居向量
         std::stack<std::multimap<float, std::weak_ptr<Vector_In_Cluster>>> every_layer_neighbors;
-        every_layer_neighbors.push(
-            this->nearest_neighbors(inserted_vector, this->layers[0]->clusters[0]->vectors.begin()->second));
+        every_layer_neighbors.push(this->nearest_neighbors(this->vectors[new_vector->global_offset].vector,
+                                                           this->layers[0]->clusters[0]->vectors.begin()->second));
         // 逐层扫描
         // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
         // 所以不需要实际的层和簇
@@ -149,8 +143,8 @@ template <typename Dimension_Type> class Index
             std::multimap<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
             for (auto &start_vector_iterator : every_layer_neighbors.top())
             {
-                auto one_cluster_neighbors =
-                    this->nearest_neighbors(inserted_vector, start_vector_iterator.second.lock()->lower_layer);
+                auto one_cluster_neighbors = this->nearest_neighbors(this->vectors[new_vector->global_offset].vector,
+                                                                     start_vector_iterator.second.lock()->lower_layer);
                 for (auto &neighbor_iterator : one_cluster_neighbors)
                 {
                     one_layer_neighbors.insert(neighbor_iterator);
@@ -168,28 +162,27 @@ template <typename Dimension_Type> class Index
             auto base_cluster = every_layer_neighbors.top().begin()->second.lock()->cluster;
             auto base_distance = every_layer_neighbors.top().begin()->first;
             uint64_t distance_rank = 1;
-            std::shared_ptr<Vector_In_Cluster> new_vector =
-                std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset, base_cluster);
             // 把新的向量加入到距离最短的向量所在的簇里
-            base_cluster.lock()->vectors.emplace(inserted_vector_global_offset, new_vector);
-            for (auto &neighbor : every_layer_neighbors.top())
+            new_vector->cluster = base_cluster;
+            base_cluster.lock()->vectors.emplace(new_vector->global_offset, new_vector);
+            for (auto &neighbor_iterator : every_layer_neighbors.top())
             {
-                if (base_distance * distance_rank * this->distance_bound < neighbor.first)
+                if (base_distance * distance_rank * this->distance_bound < neighbor_iterator.first)
                 {
                     break;
                 }
-                std::shared_ptr<Vector_In_Cluster> neighbor_vector = neighbor.second.lock();
+                std::shared_ptr<Vector_In_Cluster> neighbor_vector = neighbor_iterator.second.lock();
                 // 插入向量与邻居向量是否在一个簇中
                 if (base_cluster.lock() == neighbor_vector->cluster.lock())
                 {
                     // 将新的向量指向邻居向量
-                    new_vector->out.emplace(neighbor.first, neighbor.second);
+                    new_vector->out.emplace(neighbor_iterator.first, neighbor_iterator.second);
                     // 在邻居向量中记录指向自己的新向量
-                    neighbor_vector->in.emplace(inserted_vector_global_offset, new_vector);
-                    // 计算旧的向量是否指向新的向量
-                    if (neighbor_vector->out.upper_bound(neighbor.first) != neighbor_vector->out.end())
+                    neighbor_vector->in.emplace(new_vector->global_offset, new_vector);
+                    // 计算邻居向量是否指向新的向量
+                    if (neighbor_vector->out.upper_bound(neighbor_iterator.first) != neighbor_vector->out.end())
                     {
-                        neighbor_vector->out.emplace(neighbor.first, new_vector);
+                        neighbor_vector->out.emplace(neighbor_iterator.first, new_vector);
                         new_vector->in.emplace(neighbor_vector->global_offset, neighbor_vector);
                         if (this->max_connect < neighbor_vector->out.size())
                         {
@@ -199,21 +192,14 @@ template <typename Dimension_Type> class Index
                                 new_vector->cluster.lock()->layer.lock()->divide_a_cluster(new_vector->cluster);
                             for (auto &need_selected_cluster : need_selected_clusters)
                             {
-                                for (auto i = 0; i < this->layers.size(); ++i)
-                                {
-                                    if (this->layers[i] == need_selected_cluster.lock()->layer.lock())
-                                    {
-                                        this->insert(
-                                            this->vectors
-                                                [need_selected_cluster.lock()->vectors.begin()->second->global_offset]
-                                                    .vector,
-                                            this->layers[i]);
-                                        break;
-                                    }
-                                }
+                                auto selected_vector = std::make_shared<Vector_In_Cluster>(
+                                    need_selected_cluster.lock()->vectors.begin()->second->global_offset);
+                                selected_vector->lower_layer = need_selected_cluster.lock()->vectors.begin()->second;
+                                this->insert(selected_vector, need_selected_cluster.lock()->layer.lock()->upper_layer);
                             }
                         }
                     }
+                    // 暂定为每个簇中每max_connect个向量即选出一个代表向量进入下一层
                     if (base_cluster.lock()->selected_vectors.size() <
                         base_cluster.lock()->vectors.size() / this->max_connect)
                     {
@@ -223,37 +209,30 @@ template <typename Dimension_Type> class Index
                 else
                 {
                     // 计算旧的向量是否指向新的向量
-                    if (neighbor_vector->out.upper_bound(neighbor.first) != neighbor_vector->out.end())
+                    if (neighbor_vector->out.upper_bound(neighbor_iterator.first) != neighbor_vector->out.end())
                     {
                         if (this->max_connect == neighbor_vector->out.size())
                         {
                             neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);
                             neighbor_vector->out.erase(neighbor_vector->out.rbegin().base());
                             auto need_selected_clusters =
-                                new_vector->cluster.lock()->layer.lock()->divide_a_cluster(new_vector->cluster);
+                                neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                    neighbor_vector->cluster);
                             for (auto &need_selected_cluster : need_selected_clusters)
                             {
-                                for (auto i = 0; i < this->layers.size(); ++i)
-                                {
-                                    if (this->layers[i] == need_selected_cluster.lock()->layer.lock())
-                                    {
-                                        this->insert(
-                                            this->vectors
-                                                [need_selected_cluster.lock()->vectors.begin()->second->global_offset]
-                                                    .vector,
-                                            this->layers[i]);
-                                        break;
-                                    }
-                                }
+                                auto selected_vector = std::make_shared<Vector_In_Cluster>(
+                                    need_selected_cluster.lock()->vectors.begin()->second->global_offset);
+                                selected_vector->lower_layer = need_selected_cluster.lock()->vectors.begin()->second;
+                                this->insert(selected_vector, need_selected_cluster.lock()->layer.lock()->upper_layer);
                             }
                         }
-                        neighbor_vector->out.emplace(neighbor.first, new_vector);
+                        neighbor_vector->out.emplace(neighbor_iterator.first, new_vector);
                         new_vector->in.emplace(neighbor_vector->global_offset, neighbor_vector);
                     }
                     // 将新的向量指向邻居向量
-                    new_vector->out.emplace(neighbor.first, neighbor.second);
+                    new_vector->out.emplace(neighbor_iterator.first, neighbor_iterator.second);
                     // 在邻居向量中记录指向自己的新向量
-                    neighbor_vector->in.emplace(inserted_vector_global_offset, new_vector);
+                    neighbor_vector->in.emplace(new_vector->global_offset, new_vector);
                     new_vector->cluster.lock()->layer.lock()->merge_two_clusters(new_vector->cluster,
                                                                                  neighbor_vector->cluster);
                     insert_to_upper_layer = true;
@@ -281,12 +260,12 @@ template <typename Dimension_Type> class Index
         {
             for (auto &vector : vectors)
             {
-                this->insert(vector, this->layers[0]);
+                this->insert(vector);
             }
         }
     }
 
-    std::map<float, uint64_t> query(const std::vector<Dimension_Type> &query_vector, uint64_t topk)
+    std::map<float, uint64_t> query(const std::vector<Dimension_Type> &query_vector, uint64_t top_k)
     {
         if (this->vectors.empty())
         {
@@ -298,9 +277,9 @@ template <typename Dimension_Type> class Index
                                         "equality with vectors in index. ");
         }
         std::map<float, uint64_t> result;
-        // 如果索引中的向量数量小于topk
+        // 如果索引中的向量数量小于top-k
         // 直接暴力搜索返回排序后的全部结果
-        if (this->vectors.size() < topk)
+        if (this->vectors.size() < top_k)
         {
             for (uint64_t global_offset = 0; global_offset < this->vectors.size(); ++global_offset)
             {
@@ -310,9 +289,9 @@ template <typename Dimension_Type> class Index
         }
         else
         {
-            // 记录被插入向量每一层中距离最近的max_connect个邻居向量
+            // 记录被插入向量每一层中距离最近的top_k个邻居向量
             std::multimap<float, std::weak_ptr<Vector_In_Cluster>> every_layer_neighbors =
-                this->nearest_neighbors(query_vector, this->layers[0]->clusters[0]->vectors.begin()->second);
+                this->nearest_neighbors(query_vector, this->layers[0]->clusters[0]->vectors.begin()->second, top_k);
             // 逐层扫描
             // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
             // 所以不需要实际的层和簇
@@ -324,10 +303,10 @@ template <typename Dimension_Type> class Index
                 // 所以要进行多次计算
                 // 最后汇总计算结果
                 std::multimap<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
-                for (auto &start_vector_iteration : every_layer_neighbors)
+                for (auto &start_vector_iterator : every_layer_neighbors)
                 {
                     auto temporary_nearest_neighbors =
-                        this->nearest_neighbors(query_vector, start_vector_iteration.second.lock()->lower_layer);
+                        this->nearest_neighbors(query_vector, start_vector_iterator.second.lock()->lower_layer, top_k);
                     for (auto &neighbor_iterator : temporary_nearest_neighbors)
                     {
                         one_layer_neighbors.insert(neighbor_iterator);
@@ -349,9 +328,28 @@ template <typename Dimension_Type> class Index
 
     void insert(const std::vector<Dimension_Type> &inserted_vector)
     {
-        this->insert(inserted_vector, 0);
+        // 插入向量在原始数据中的偏移量
+        uint64_t inserted_vector_global_offset = this->vectors.size();
+        if (inserted_vector_global_offset == 0)
+        {
+            this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
+            this->layers.push_back(std::make_shared<Layer>());
+            this->layers[0]->clusters.push_back(std::make_shared<Cluster>(this->layers[0]));
+            auto new_vector = std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset);
+            new_vector->cluster = this->layers[0]->clusters[0];
+            this->layers[0]->clusters[0]->vectors.emplace(inserted_vector_global_offset, new_vector);
+            return;
+        }
+        if (inserted_vector.size() != this->vectors[0].vector.size())
+        {
+            throw std::invalid_argument("The dimension of insert vector is not "
+                                        "equality with vectors in index. ");
+        }
+        this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
+        this->insert(std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset), this->layers[0]);
     }
 
+    // todo
     //    void remove(const std::vector<Dimension_Type> &vector)
     //    {
     //    }
