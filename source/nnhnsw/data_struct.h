@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cinttypes>
+#include <concepts>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -12,6 +13,9 @@
 
 class Cluster;
 class Layer;
+
+template <typename T>
+concept Numerical_Type = requires(T t) { requires std::is_floating_point_v<T> || std::is_integral<T>; };
 
 // 向量
 template <typename Dimension_Type> class Vector

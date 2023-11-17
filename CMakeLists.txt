@@ -23,7 +23,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
 
-        set(CMAKE_CXX_FLAGS_DEBUG "-g -gstabs -O0 -Wall -Wextra -Wpedantic" CACHE STRING "" FORCE)
+        set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra -Wpedantic" CACHE STRING "" FORCE)
 
     endif ()
 

@@ -1,5 +1,4 @@
-#ifndef DISTANCE_TYPE
-#define DISTANCE_TYPE
+#pragma once
 
 #include <cinttypes>
 #include <cmath>
@@ -83,5 +82,3 @@ template <typename Dimension_Type> auto get_distance_calculation_function(Distan
         break;
     }
 }
-
-#endif

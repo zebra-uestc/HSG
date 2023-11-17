@@ -1,7 +1,6 @@
-#ifndef BRUTEFORCE
-#define BRUTEFORCE
+#pragma once
 
-#include <inttypes.h>
+#include <cinttypes>
 #include <map>
 #include <vector>
 
@@ -10,26 +9,24 @@
 namespace bruteforce
 {
 template <typename Dimension_Type>
-std::map<float, int32_t> search(const std::vector<std::vector<Dimension_Type>> &vector,
-                                const std::vector<Dimension_Type> &query, const int32_t k)
+std::map<float, uint64_t> search(const std::vector<std::vector<Dimension_Type>> &vectors,
+                                 const std::vector<Dimension_Type> &query, const uint64_t k)
 {
-    std::map<Dimension_Type, int32_t> result;
-    for (auto i = 0; i < k; ++i)
+    std::map<Dimension_Type, uint64_t> result;
+    for (auto i = 0; i < k * 2 && i < vectors.size(); ++i)
     {
-        float distance = euclidean2::distance<Dimension_Type>(vector[i], query);
-        result.insert(std::pair<float, int32_t>(distance, i));
+        auto distance = euclidean2::distance(vectors[i], query);
+        result.emplace(distance, i);
     }
-    for (auto i = k; i < vector.size(); ++i)
+    for (auto i = k; i < vectors.size(); ++i)
     {
-        float distance = euclidean2::distance<Dimension_Type>(vector[i], query);
+        float distance = euclidean2::distance<Dimension_Type>(vectors[i], query);
         if (result.upper_bound(distance) != result.end())
         {
-            result.insert(std::pair<float, int32_t>(distance, i));
+            result.emplace(distance, i);
             result.erase(std::prev(result.end()));
         }
     }
     return result;
 }
 } // namespace bruteforce
-
-#endif
