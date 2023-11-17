@@ -14,19 +14,16 @@
 class Cluster;
 class Layer;
 
-template <typename T>
-concept Numerical_Type = requires(T t) { requires std::is_floating_point_v<T> || std::is_integral<T>; };
-
 // 向量
 template <typename Dimension_Type> class Vector
 {
   private:
   public:
-    std::vector<Dimension_Type> vector;
+    std::vector<Dimension_Type> data;
 
-    explicit Vector(const std::vector<Dimension_Type> &vector)
+    explicit Vector(const std::vector<Dimension_Type> &data)
     {
-        this->vector = vector;
+        this->data = data;
     }
 };
 

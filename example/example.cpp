@@ -106,22 +106,23 @@ int main(int argc, char **argv)
     //        std::cout << std::endl;
     //    }
     //    std::cout << neighbors.size() << "  " << neighbors.begin()->size() << std::endl;
-    for (int i = 0; i < query.size(); ++i)
-    {
-        auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = bruteforce::search<float>(vectors, query[i], neighbors[i].size());
-        auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "one query(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()
-                  << std::endl;
-        auto hit = verify(neighbors[i], query_result);
-        std::cout << "recall: " << hit << std::endl;
-    }
-    //    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
-    //    for (auto i = 0; i < query.size(); ++i)
+    //    for (int i = 0; i < query.size(); ++i)
     //    {
-    //        auto query_result = index.query(query[i], neighbors[i].size());
+    //        auto begin = std::chrono::high_resolution_clock::now();
+    //        auto query_result = bruteforce::search<float>(vectors, query[i], neighbors[i].size());
+    //        auto end = std::chrono::high_resolution_clock::now();
+    //        std::cout << "one query(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end -
+    //        begin).count()
+    //                  << std::endl;
     //        auto hit = verify(neighbors[i], query_result);
-    //        std::cout << "recall: " << hit / neighbors[i].size() << std::endl;
+    //        std::cout << "recall: " << hit << std::endl;
     //    }
+    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
+    for (auto i = 0; i < query.size(); ++i)
+    {
+        auto query_result = index.query(query[i], neighbors[i].size());
+        auto hit = verify(neighbors[i], query_result);
+        std::cout << "recall: " << hit / neighbors[i].size() << std::endl;
+    }
     return 0;
 }
