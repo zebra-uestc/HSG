@@ -7,7 +7,7 @@
 #include "bruteforce.h"
 #include "nnhnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &result, const std::map<float, uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &result, const std::multimap<float, uint64_t> &query_result)
 {
     uint64_t hit = 0;
     auto query_result_iterator = query_result.begin();

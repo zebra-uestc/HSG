@@ -149,26 +149,25 @@ class Layer
     }
 
     // 合并两个簇
-    void merge_two_clusters(const std::weak_ptr<Cluster> &target_cluster, const std::weak_ptr<Cluster> &merged_cluster)
+    void merge_two_clusters(const std::shared_ptr<Cluster> &target_cluster,
+                            const std::shared_ptr<Cluster> &merged_cluster)
     {
-        std::shared_ptr<Cluster> temporary_target_cluster_pointer = target_cluster.lock();
-        std::shared_ptr<Cluster> temporary_merged_cluster_pointer = merged_cluster.lock();
         // 移动被合并的簇中的向量到目标簇中
-        for (auto &merged_cluster_vector : temporary_merged_cluster_pointer->vectors)
+        for (auto &merged_cluster_vector : merged_cluster->vectors)
         {
             merged_cluster_vector.second->cluster = target_cluster;
-            temporary_target_cluster_pointer->vectors.insert(merged_cluster_vector);
+            target_cluster->vectors.insert(merged_cluster_vector);
         }
         // 移动被合并的簇中被选出的代表向量到目标簇中
-        for (auto &merged_cluster_selected_vector : temporary_merged_cluster_pointer->selected_vectors)
+        for (auto &merged_cluster_selected_vector : merged_cluster->selected_vectors)
         {
-            temporary_target_cluster_pointer->selected_vectors.insert(merged_cluster_selected_vector);
+            target_cluster->selected_vectors.insert(merged_cluster_selected_vector);
         }
         // 删除簇
         for (auto cluster_iterator = this->clusters.begin(); cluster_iterator != this->clusters.end();
              ++cluster_iterator)
         {
-            if (*cluster_iterator == temporary_merged_cluster_pointer)
+            if (*cluster_iterator == merged_cluster)
             {
                 this->clusters.erase(cluster_iterator);
                 break;
@@ -179,10 +178,9 @@ class Layer
     // 分裂一个簇
     // 新的簇中可能没有被选出的向量在上一层中
     // 将这些簇的编号返回
-    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(const std::weak_ptr<Cluster> &cluster)
+    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(const std::shared_ptr<Cluster> &cluster)
     {
-        std::shared_ptr<Cluster> temporary_divided_cluster = cluster.lock();
-        auto new_clusters = temporary_divided_cluster->calculate_clusters();
+        auto new_clusters = cluster->calculate_clusters();
         std::vector<std::weak_ptr<Cluster>> no_selected_clusters;
         if (new_clusters[0]->selected_vectors.empty())
         {
@@ -190,7 +188,7 @@ class Layer
         }
         for (auto &cluster_iterator : this->clusters)
         {
-            if (cluster_iterator == temporary_divided_cluster)
+            if (cluster_iterator == cluster)
             {
                 cluster_iterator = new_clusters[0];
                 break;
