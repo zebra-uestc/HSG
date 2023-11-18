@@ -112,16 +112,16 @@ template <typename Dimension_Type> class Index
         return nearest_neighbors;
     }
 
-    void insert(std::shared_ptr<Vector_In_Cluster> &new_vector, const std::shared_ptr<Layer> &target_layer)
+    void insert(std::shared_ptr<Vector_In_Cluster> &new_vector, const uint64_t target_layer_number)
     {
-        if (target_layer == nullptr)
+        if (target_layer_number == this->layers.size())
         {
             auto new_layer = std::make_shared<Layer>();
-            new_layer->lower_layer = *(std::prev(this->layers.end()));
-            new_layer->lower_layer.lock()->upper_layer = new_layer;
+            new_layer->lower_layer = this->layers[this->layers.size() - 1];
+            this->layers[this->layers.size() - 1]->upper_layer = new_layer;
             this->layers.push_back(new_layer);
             auto new_cluster = std::make_shared<Cluster>(new_layer);
-            new_cluster->vectors.emplace(new_vector->global_offset, new_vector);
+            new_cluster->vectors.insert(std::pair(new_vector->global_offset, new_vector));
             new_vector->cluster = new_cluster;
             new_layer->clusters.push_back(new_cluster);
             return;
@@ -135,7 +135,7 @@ template <typename Dimension_Type> class Index
         // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
         // 所以不需要实际的层和簇
         // 直接通过上一层中返回的结果即可进行计算
-        while (every_layer_neighbors.top().begin()->second.lock()->cluster.lock()->layer.lock() != target_layer)
+        while (every_layer_neighbors.size() != this->layers.size() - target_layer_number)
         {
             // 一层中有好多的簇
             // 每个簇之间是不连通的
@@ -166,7 +166,7 @@ template <typename Dimension_Type> class Index
             uint64_t distance_rank = 1;
             // 把新的向量加入到距离最短的向量所在的簇里
             new_vector->cluster = base_cluster;
-            base_cluster->vectors.emplace(new_vector->global_offset, new_vector);
+            base_cluster->vectors.insert(std::pair(new_vector->global_offset, new_vector));
             for (auto &neighbor_iterator : every_layer_neighbors.top())
             {
                 if (base_distance * distance_rank * this->distance_bound < neighbor_iterator.first)
@@ -178,14 +178,15 @@ template <typename Dimension_Type> class Index
                 if (base_cluster == neighbor_vector->cluster.lock())
                 {
                     // 将新的向量指向邻居向量
-                    new_vector->out.emplace(neighbor_iterator.first, neighbor_vector);
+                    new_vector->out.insert(std::pair(neighbor_iterator.first, neighbor_vector));
                     // 在邻居向量中记录指向自己的新向量
-                    neighbor_vector->in.emplace(new_vector->global_offset, new_vector);
+                    neighbor_vector->in.insert(std::pair(new_vector->global_offset, new_vector));
                     // 计算邻居向量是否指向新的向量
                     if (neighbor_vector->out.upper_bound(neighbor_iterator.first) != neighbor_vector->out.end())
                     {
-                        neighbor_vector->out.emplace(neighbor_iterator.first, new_vector);
-                        new_vector->in.emplace(neighbor_vector->global_offset, neighbor_vector);
+                        neighbor_vector->out.insert(std::pair(neighbor_iterator.first, new_vector));
+                        new_vector->in.insert(std::pair(neighbor_vector->global_offset, neighbor_vector));
+                        // todo
                         if (this->max_connect < neighbor_vector->out.size())
                         {
                             neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);

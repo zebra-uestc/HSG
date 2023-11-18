@@ -177,14 +177,15 @@ class Layer
 
     // 分裂一个簇
     // 新的簇中可能没有被选出的向量在上一层中
-    // 将这些簇的编号返回
-    std::vector<std::weak_ptr<Cluster>> divide_a_cluster(const std::shared_ptr<Cluster> &cluster)
+    // 返回需要插入到上一层中的向量
+    std::vector<std::shared_ptr<Vector_In_Cluster>> divide_a_cluster(const std::shared_ptr<Cluster> &cluster)
     {
         auto new_clusters = cluster->calculate_clusters();
-        std::vector<std::weak_ptr<Cluster>> no_selected_clusters;
+        std::vector<std::shared_ptr<Vector_In_Cluster>> selected_vectors;
         if (new_clusters[0]->selected_vectors.empty())
         {
-            no_selected_clusters.push_back(new_clusters[0]);
+            selected_vectors.push_back(std::make_shared<Vector_In_Cluster>(new_clusters[0]->vectors[0]->global_offset));
+            selected_vectors[selected_vectors.size() - 1]->lower_layer = new_clusters[0]->vectors[0];
         }
         for (auto &cluster_iterator : this->clusters)
         {
@@ -194,15 +195,17 @@ class Layer
                 break;
             }
         }
-        for (auto new_cluster_iterator = new_clusters.begin() + 1; new_cluster_iterator != new_clusters.end();
-             ++new_cluster_iterator)
+        for (auto new_cluster_offset = 1; new_cluster_offset < new_clusters.size(); ++new_cluster_offset)
         {
-            if ((*new_cluster_iterator)->selected_vectors.empty())
+            if (new_clusters[new_cluster_offset]->selected_vectors.empty())
             {
-                no_selected_clusters.push_back(*new_cluster_iterator);
+                selected_vectors.push_back(
+                    std::make_shared<Vector_In_Cluster>(new_clusters[new_cluster_offset]->vectors[0]->global_offset));
+                selected_vectors[selected_vectors.size() - 1]->lower_layer =
+                    new_clusters[new_cluster_offset]->vectors[0];
             }
-            this->clusters.push_back(*new_cluster_iterator);
+            this->clusters.push_back(new_clusters[new_cluster_offset]);
         }
-        return no_selected_clusters;
+        return selected_vectors;
     }
 };
