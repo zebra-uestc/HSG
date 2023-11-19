@@ -199,8 +199,13 @@ template <typename Dimension_Type> class Index
                                         j->second.lock()->in.erase(neighbor_vector->global_offset);
                                     }
                                     neighbor_vector->out.erase(iterator, neighbor_vector->out.end());
-                                    neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
-                                        neighbor_vector->cluster.lock());
+                                    auto selected_vectors =
+                                        neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                            neighbor_vector->cluster.lock());
+                                    for (auto &selected_vector : selected_vectors)
+                                    {
+                                        this->insert(selected_vector, target_layer_number + 1);
+                                    }
                                     break;
                                 }
                                 ++offset;
@@ -245,8 +250,13 @@ template <typename Dimension_Type> class Index
                                         j->second.lock()->in.erase(neighbor_vector->global_offset);
                                     }
                                     neighbor_vector->out.erase(iterator, neighbor_vector->out.end());
-                                    neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
-                                        neighbor_vector->cluster.lock());
+                                    auto selected_vectors =
+                                        neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                            neighbor_vector->cluster.lock());
+                                    for (auto &selected_vector : selected_vectors)
+                                    {
+                                        this->insert(selected_vector, target_layer_number + 1);
+                                    }
                                     break;
                                 }
                                 ++offset;
@@ -402,7 +412,7 @@ template <typename Dimension_Type> class Index
         }
         this->vectors.push_back(Vector<Dimension_Type>(inserted_vector));
         auto new_vector = std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset);
-        this->insert(new_vector, this->layers[0]);
+        this->insert(new_vector, 0);
     }
 };
 

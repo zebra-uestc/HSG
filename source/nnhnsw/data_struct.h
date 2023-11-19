@@ -84,7 +84,7 @@ class Cluster
             if (!flag.contains(vector_iterator.first))
             {
                 ++hit;
-                flag.emplace(vector_iterator.first, new_cluster_number);
+                flag.insert(std::pair(vector_iterator.first, new_cluster_number));
                 std::shared_ptr<Cluster> temporary_cluster = std::make_shared<Cluster>(this->layer);
                 vector_iterator.second->cluster = temporary_cluster;
                 temporary_cluster->vectors.emplace(vector_iterator.first, vector_iterator.second);
@@ -182,8 +182,14 @@ class Layer
     {
         auto new_clusters = cluster->calculate_clusters();
         std::vector<std::shared_ptr<Vector_In_Cluster>> selected_vectors;
-        if (cluster->layer.lock()->upper_layer.expired())
+        if (new_clusters.size() != 1)
         {
+            if (new_clusters[0]->selected_vectors.empty())
+            {
+                selected_vectors.push_back(
+                    std::make_shared<Vector_In_Cluster>(new_clusters[0]->vectors[0]->global_offset));
+                selected_vectors[selected_vectors.size() - 1]->lower_layer = new_clusters[0]->vectors[0];
+            }
             for (auto &cluster_iterator : this->clusters)
             {
                 if (cluster_iterator == cluster)
@@ -194,33 +200,26 @@ class Layer
             }
             for (auto new_cluster_offset = 1; new_cluster_offset < new_clusters.size(); ++new_cluster_offset)
             {
+                if (new_clusters[new_cluster_offset]->selected_vectors.empty())
+                {
+                    selected_vectors.push_back(std::make_shared<Vector_In_Cluster>(
+                        new_clusters[new_cluster_offset]->vectors[0]->global_offset));
+                    selected_vectors[selected_vectors.size() - 1]->lower_layer =
+                        new_clusters[new_cluster_offset]->vectors[0];
+                }
                 this->clusters.push_back(new_clusters[new_cluster_offset]);
             }
-            return selected_vectors;
         }
-        if (new_clusters[0]->selected_vectors.empty())
+        else
         {
-            selected_vectors.push_back(std::make_shared<Vector_In_Cluster>(new_clusters[0]->vectors[0]->global_offset));
-            selected_vectors[selected_vectors.size() - 1]->lower_layer = new_clusters[0]->vectors[0];
-        }
-        for (auto &cluster_iterator : this->clusters)
-        {
-            if (cluster_iterator == cluster)
+            for (auto &cluster_iterator : this->clusters)
             {
-                cluster_iterator = new_clusters[0];
-                break;
+                if (cluster_iterator == cluster)
+                {
+                    cluster_iterator = new_clusters[0];
+                    break;
+                }
             }
-        }
-        for (auto new_cluster_offset = 1; new_cluster_offset < new_clusters.size(); ++new_cluster_offset)
-        {
-            if (new_clusters[new_cluster_offset]->selected_vectors.empty())
-            {
-                selected_vectors.push_back(
-                    std::make_shared<Vector_In_Cluster>(new_clusters[new_cluster_offset]->vectors[0]->global_offset));
-                selected_vectors[selected_vectors.size() - 1]->lower_layer =
-                    new_clusters[new_cluster_offset]->vectors[0];
-            }
-            this->clusters.push_back(new_clusters[new_cluster_offset]);
         }
         return selected_vectors;
     }
