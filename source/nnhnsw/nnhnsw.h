@@ -186,22 +186,34 @@ template <typename Dimension_Type> class Index
                     {
                         neighbor_vector->out.insert(std::pair(neighbor_iterator.first, new_vector));
                         new_vector->in.insert(std::pair(neighbor_vector->global_offset, neighbor_vector));
-                        // todo
-                        if (this->max_connect < neighbor_vector->out.size())
+                        if (neighbor_vector->out.begin()->first == neighbor_iterator.first)
+                        {
+                            uint64_t offset = 1;
+                            for (auto iterator = neighbor_vector->out.begin(); iterator != neighbor_vector->out.end();
+                                 ++iterator)
+                            {
+                                if (neighbor_iterator.first * offset * this->distance_bound < iterator->first)
+                                {
+                                    for (auto j = iterator; j != neighbor_vector->out.end(); ++j)
+                                    {
+                                        j->second.lock()->in.erase(neighbor_vector->global_offset);
+                                    }
+                                    neighbor_vector->out.erase(iterator, neighbor_vector->out.end());
+                                    neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                        neighbor_vector->cluster.lock());
+                                    break;
+                                }
+                                ++offset;
+                            }
+                        }
+                        else if (this->max_connect < neighbor_vector->out.size())
                         {
                             neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);
                             neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
-                            auto need_selected_clusters = base_cluster->layer.lock()->divide_a_cluster(base_cluster);
-                            if (!(every_layer_neighbors.size() == 1 && need_selected_clusters.size() == 1))
+                            auto selected_vectors = base_cluster->layer.lock()->divide_a_cluster(base_cluster);
+                            for (auto &selected_vector : selected_vectors)
                             {
-                                for (auto &need_selected_cluster : need_selected_clusters)
-                                {
-                                    auto selected_cluster = need_selected_cluster.lock();
-                                    auto selected_vector = std::make_shared<Vector_In_Cluster>(
-                                        selected_cluster->vectors.begin()->second->global_offset);
-                                    selected_vector->lower_layer = selected_cluster->vectors.begin()->second;
-                                    this->insert(selected_vector, selected_cluster->layer.lock()->upper_layer.lock());
-                                }
+                                this->insert(selected_vector, target_layer_number + 1);
                             }
                         }
                     }
@@ -220,23 +232,35 @@ template <typename Dimension_Type> class Index
                     // 计算邻居向量是否指向新的向量
                     if (neighbor_vector->out.upper_bound(neighbor_iterator.first) != neighbor_vector->out.end())
                     {
-                        if (this->max_connect == neighbor_vector->out.size())
+                        if (neighbor_iterator.first < neighbor_vector->out.begin()->first)
+                        {
+                            uint64_t offset = 1;
+                            for (auto iterator = neighbor_vector->out.begin(); iterator != neighbor_vector->out.end();
+                                 ++iterator)
+                            {
+                                if (neighbor_iterator.first * offset * this->distance_bound < iterator->first)
+                                {
+                                    for (auto j = iterator; j != neighbor_vector->out.end(); ++j)
+                                    {
+                                        j->second.lock()->in.erase(neighbor_vector->global_offset);
+                                    }
+                                    neighbor_vector->out.erase(iterator, neighbor_vector->out.end());
+                                    neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                        neighbor_vector->cluster.lock());
+                                    break;
+                                }
+                                ++offset;
+                            }
+                        }
+                        else if (this->max_connect == neighbor_vector->out.size())
                         {
                             neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);
                             neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
-                            auto need_selected_clusters =
-                                neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
-                                    neighbor_vector->cluster.lock());
-                            if (!(every_layer_neighbors.size() == 1 && need_selected_clusters.size() == 1))
+                            auto selected_vectors = neighbor_vector->cluster.lock()->layer.lock()->divide_a_cluster(
+                                neighbor_vector->cluster.lock());
+                            for (auto &selected_vector : selected_vectors)
                             {
-                                for (auto &need_selected_cluster : need_selected_clusters)
-                                {
-                                    auto selected_cluster = need_selected_cluster.lock();
-                                    auto selected_vector = std::make_shared<Vector_In_Cluster>(
-                                        selected_cluster->vectors.begin()->second->global_offset);
-                                    selected_vector->lower_layer = selected_cluster->vectors.begin()->second;
-                                    this->insert(selected_vector, selected_cluster->layer.lock()->upper_layer.lock());
-                                }
+                                this->insert(selected_vector, target_layer_number + 1);
                             }
                         }
                         neighbor_vector->out.emplace(neighbor_iterator.first, new_vector);
@@ -246,6 +270,7 @@ template <typename Dimension_Type> class Index
                     new_vector->out.emplace(neighbor_iterator.first, neighbor_iterator.second);
                     // 在邻居向量中记录指向自己的新向量
                     neighbor_vector->in.emplace(new_vector->global_offset, new_vector);
+                    // 合并两个簇
                     new_vector->cluster.lock()->layer.lock()->merge_two_clusters(new_vector->cluster.lock(),
                                                                                  neighbor_vector->cluster.lock());
                     if (new_vector->cluster.lock()->layer.lock()->clusters.size() == 1)
@@ -253,6 +278,10 @@ template <typename Dimension_Type> class Index
                         while (this->layers[this->layers.size() - 1] != new_vector->cluster.lock()->layer.lock())
                         {
                             this->layers.pop_back();
+                        }
+                        for (auto &top_layer_cluster : new_vector->cluster.lock()->layer.lock()->clusters)
+                        {
+                            top_layer_cluster->selected_vectors.clear();
                         }
                     }
                     else

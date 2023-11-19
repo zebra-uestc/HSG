@@ -182,6 +182,22 @@ class Layer
     {
         auto new_clusters = cluster->calculate_clusters();
         std::vector<std::shared_ptr<Vector_In_Cluster>> selected_vectors;
+        if (cluster->layer.lock()->upper_layer.expired())
+        {
+            for (auto &cluster_iterator : this->clusters)
+            {
+                if (cluster_iterator == cluster)
+                {
+                    cluster_iterator = new_clusters[0];
+                    break;
+                }
+            }
+            for (auto new_cluster_offset = 1; new_cluster_offset < new_clusters.size(); ++new_cluster_offset)
+            {
+                this->clusters.push_back(new_clusters[new_cluster_offset]);
+            }
+            return selected_vectors;
+        }
         if (new_clusters[0]->selected_vectors.empty())
         {
             selected_vectors.push_back(std::make_shared<Vector_In_Cluster>(new_clusters[0]->vectors[0]->global_offset));
