@@ -105,10 +105,10 @@ template <typename Dimension_Type> class Index
     std::vector<std::shared_ptr<Layer>> layers;
 
     // 每个向量的最大邻居向量个数
-    uint64_t max_connect;
+    uint64_t max_connect{};
 
-    // 最大距离倍数
-    uint64_t distance_bound;
+    // 最大距离系数
+    uint64_t distance_bound{};
 
     // 距离计算
     float (*distance_calculation)(const std::vector<Dimension_Type> &vector1,
@@ -142,13 +142,15 @@ void merge_two_clusters(const std::shared_ptr<Cluster> &target_cluster, const st
     for (auto &merged_cluster_vector : merged_cluster->vectors)
     {
         merged_cluster_vector.second->cluster = target_cluster;
-        target_cluster->vectors.insert(merged_cluster_vector);
     }
+    target_cluster->vectors.insert(merged_cluster->vectors.begin(), merged_cluster->vectors.end());
     // 移动被合并的簇中被选出的代表向量到目标簇中
-    for (auto &merged_cluster_selected_vector : merged_cluster->selected_vectors)
-    {
-        target_cluster->selected_vectors.insert(merged_cluster_selected_vector);
-    }
+    target_cluster->selected_vectors.insert(merged_cluster->selected_vectors.begin(),
+                                            merged_cluster->selected_vectors.end());
+    //    for (auto &merged_cluster_selected_vector : merged_cluster->selected_vectors)
+    //    {
+    //        target_cluster->selected_vectors.insert(merged_cluster_selected_vector);
+    //    }
     // 删除簇
     auto layer = target_cluster->layer.lock();
     for (auto cluster_iterator = layer->clusters.begin(); cluster_iterator != layer->clusters.end(); ++cluster_iterator)
@@ -162,62 +164,83 @@ void merge_two_clusters(const std::shared_ptr<Cluster> &target_cluster, const st
 }
 
 // 返回当前簇中所有的簇
-std::vector<std::shared_ptr<Cluster>> calculate_clusters(std::shared_ptr<Cluster> &cluster)
+std::vector<std::shared_ptr<Cluster>> calculate_clusters(const std::shared_ptr<Cluster> &cluster)
 {
-    uint64_t hit = 0;
-    std::vector<std::shared_ptr<Cluster>> new_clusters;
+    auto new_clusters = std::vector<std::shared_ptr<Cluster>>();
     // key：向量的全局偏移量
     // value：向量在第几个新的簇中
     std::unordered_map<uint64_t, uint64_t> flag;
-    uint64_t new_cluster_number = 0;
-    for (auto &vector : cluster->vectors)
+    //
     {
-        if (flag.insert(std::make_pair(vector.first, new_cluster_number)).second)
+        flag.insert(std::make_pair(cluster->vectors.begin()->first, 0));
+        auto waiting_vectors = std::queue<uint64_t>();
+        waiting_vectors.push(cluster->vectors.begin()->first);
+        while (!waiting_vectors.empty())
         {
-            ++hit;
-            auto temporary_cluster = std::make_shared<Cluster>(cluster->layer);
-            vector.second->cluster = temporary_cluster;
-            temporary_cluster->vectors.insert(std::make_pair(vector.first, vector.second));
-            std::queue<uint64_t> waiting_vectors;
-            waiting_vectors.push(vector.first);
-            while (!waiting_vectors.empty())
+            uint64_t vector_global_offset = waiting_vectors.front();
+            waiting_vectors.pop();
+            for (auto &out_neighbor : cluster->vectors.find(vector_global_offset)->second->out)
             {
-                uint64_t neighbor = waiting_vectors.front();
-                waiting_vectors.pop();
-                for (auto &out_neighbor : cluster->vectors.find(neighbor)->second->out)
-                {
-                    auto temporary_vector_pointer = out_neighbor.second.lock();
-                    if (flag.insert(std::make_pair(temporary_vector_pointer->global_offset, new_cluster_number)).second)
-                    {
-                        ++hit;
-                        temporary_vector_pointer->cluster = temporary_cluster;
-                        temporary_cluster->vectors.insert(
-                            std::make_pair(temporary_vector_pointer->global_offset, temporary_vector_pointer));
-                    }
-                }
-                for (auto &in_neighbor : cluster->vectors.find(neighbor)->second->in)
-                {
-                    if (flag.insert(std::make_pair(in_neighbor.first, new_cluster_number)).second)
-                    {
-                        ++hit;
-                        in_neighbor.second.lock()->cluster = temporary_cluster;
-                        temporary_cluster->vectors.insert(std::make_pair(in_neighbor.first, in_neighbor.second));
-                    }
-                }
+                flag.insert(std::make_pair(out_neighbor.second.lock()->global_offset, 0));
             }
-            new_clusters.push_back(temporary_cluster);
-            ++new_cluster_number;
-        }
-        if (hit == cluster->vectors.size())
-        {
-            break;
+            for (auto &in_neighbor : cluster->vectors.find(vector_global_offset)->second->in)
+            {
+                flag.insert(std::make_pair(in_neighbor.first, 0));
+            }
         }
     }
-    for (auto &selected_vector : cluster->selected_vectors)
+    if (flag.size() != cluster->vectors.size())
     {
-        new_clusters[flag.find(selected_vector)->second]->selected_vectors.insert(selected_vector);
+        new_clusters.push_back(cluster);
+        uint64_t new_cluster_number = 1;
+        for (auto &vector : cluster->vectors)
+        {
+            if (flag.insert(std::make_pair(vector.first, new_cluster_number)).second)
+            {
+                auto new_cluster = std::make_shared<Cluster>(cluster->layer);
+                vector.second->cluster = new_cluster;
+                new_cluster->vectors.insert(vector);
+                auto waiting_vectors = std::queue<uint64_t>();
+                waiting_vectors.push(vector.first);
+                while (!waiting_vectors.empty())
+                {
+                    uint64_t vector_global_offset = waiting_vectors.front();
+                    waiting_vectors.pop();
+                    for (auto &out_neighbor : cluster->vectors.find(vector_global_offset)->second->out)
+                    {
+                        auto temporary_vector_pointer = out_neighbor.second.lock();
+                        if (flag.insert(std::make_pair(temporary_vector_pointer->global_offset, new_cluster_number))
+                                .second)
+                        {
+                            temporary_vector_pointer->cluster = new_cluster;
+                            new_cluster->vectors.insert(
+                                std::make_pair(temporary_vector_pointer->global_offset, temporary_vector_pointer));
+                        }
+                    }
+                    for (auto &in_neighbor : cluster->vectors.find(vector_global_offset)->second->in)
+                    {
+                        if (flag.insert(std::make_pair(in_neighbor.first, new_cluster_number)).second)
+                        {
+                            in_neighbor.second.lock()->cluster = new_cluster;
+                            new_cluster->vectors.insert(in_neighbor);
+                        }
+                    }
+                }
+                new_clusters.push_back(new_cluster);
+                ++new_cluster_number;
+            }
+            if (flag.size() == cluster->vectors.size())
+            {
+                break;
+            }
+        }
+        auto temporary = std::unordered_set<uint64_t>();
+        std::swap(temporary, cluster->selected_vectors);
+        for (auto &selected_vector : temporary)
+        {
+            new_clusters[flag.find(selected_vector)->second]->selected_vectors.insert(selected_vector);
+        }
     }
-    cluster = new_clusters[0];
     return new_clusters;
 }
 
@@ -226,15 +249,7 @@ std::vector<std::shared_ptr<Cluster>> calculate_clusters(std::shared_ptr<Cluster
 // 返回需要插入到上一层中的向量
 std::vector<std::shared_ptr<Vector_In_Cluster>> divide_a_cluster(const std::shared_ptr<Cluster> &cluster)
 {
-    std::vector<std::shared_ptr<Cluster>> new_clusters;
-    for (auto &cluster_in_layer : cluster->layer.lock()->clusters)
-    {
-        if (cluster == cluster_in_layer)
-        {
-            new_clusters = calculate_clusters(cluster_in_layer);
-            break;
-        }
-    }
+    auto new_clusters = calculate_clusters(cluster);
     auto selected_vectors = std::vector<std::shared_ptr<Vector_In_Cluster>>();
     // 如果分裂成多个簇
     if (new_clusters.size() > 1)
@@ -295,6 +310,7 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
         flags.insert(processing_vector->global_offset);
         recent_distance.push(processing_distance);
         sorted_recent_distance.insert(processing_distance);
+        // 如果已遍历的向量小于top-k
         if (nearest_neighbors.size() < top_k)
         {
             nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
@@ -303,6 +319,7 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
         {
             sorted_recent_distance.erase(recent_distance.front());
             recent_distance.pop();
+            // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
             if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
             {
                 nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
@@ -310,11 +327,14 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
             }
             auto median = sorted_recent_distance.begin();
             std::advance(median, sorted_recent_distance.size() / 2);
+            // 如果优先队列中的最大值小于最近浏览的向量的距离的中值
+            // 结束遍历
             if (std::prev(nearest_neighbors.end())->first < *median)
             {
                 break;
             }
         }
+        // 计算当前向量的出边指向的向量和目标向量的距离
         for (auto &vector : processing_vector->out)
         {
             auto temporary_vector_pointer = vector.second.lock();
@@ -326,6 +346,7 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
                                    temporary_vector_pointer));
             }
         }
+        // 计算当前向量的入边指向的向量和目标向量的距离
         for (auto &vector : processing_vector->in)
         {
             if (flags.insert(vector.first).second)
@@ -451,15 +472,6 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                         }
                     }
                 }
-                // 暂定为每个簇中每max_connect个向量即选出一个代表向量进入下一层
-                if (every_layer_neighbors.size() != 1 &&
-                    base_cluster->selected_vectors.size() <= base_cluster->vectors.size() / index.max_connect)
-                {
-                    insert_to_upper_layer = true;
-                    auto temporary = std::make_shared<Vector_In_Cluster>(new_vector->global_offset);
-                    temporary->lower_layer = new_vector;
-                    new_vector = temporary;
-                }
             }
             else
             {
@@ -584,10 +596,6 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
                 auto temporary_nearest_neighbors =
                     nearest_neighbors(index, query_vector, start_vector.second.lock()->lower_layer.lock(), top_k);
                 one_layer_neighbors.insert(temporary_nearest_neighbors.begin(), temporary_nearest_neighbors.end());
-                //                for (auto &neighbor : temporary_nearest_neighbors)
-                //                {
-                //                    one_layer_neighbors.insert(neighbor);
-                //                }
                 auto last_neighbor = one_layer_neighbors.begin();
                 std::advance(last_neighbor, index.max_connect);
                 one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
@@ -628,7 +636,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     }
     index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
     auto new_vector = std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset);
-    insert(index, new_vector, 0);
+    insert(index, std::move(new_vector), 0);
 }
 
 } // namespace nnhnsw
