@@ -170,76 +170,50 @@ std::vector<std::shared_ptr<Cluster>> calculate_clusters(const std::shared_ptr<C
     // key：向量的全局偏移量
     // value：向量在第几个新的簇中
     std::unordered_map<uint64_t, uint64_t> flag;
-    //
+    uint64_t new_cluster_number = 0;
+    for (auto &vector : cluster->vectors)
     {
-        flag.insert(std::make_pair(cluster->vectors.begin()->first, 0));
-        auto waiting_vectors = std::queue<uint64_t>();
-        waiting_vectors.push(cluster->vectors.begin()->first);
-        while (!waiting_vectors.empty())
+        if (flag.insert(std::make_pair(vector.first, new_cluster_number)).second)
         {
-            uint64_t vector_global_offset = waiting_vectors.front();
-            waiting_vectors.pop();
-            for (auto &out_neighbor : cluster->vectors.find(vector_global_offset)->second->out)
+            auto new_cluster = std::make_shared<Cluster>(cluster->layer);
+            vector.second->cluster = new_cluster;
+            new_cluster->vectors.insert(vector);
+            auto waiting_vectors = std::queue<uint64_t>();
+            waiting_vectors.push(vector.first);
+            while (!waiting_vectors.empty())
             {
-                flag.insert(std::make_pair(out_neighbor.second.lock()->global_offset, 0));
-            }
-            for (auto &in_neighbor : cluster->vectors.find(vector_global_offset)->second->in)
-            {
-                flag.insert(std::make_pair(in_neighbor.first, 0));
-            }
-        }
-    }
-    if (flag.size() != cluster->vectors.size())
-    {
-        new_clusters.push_back(cluster);
-        uint64_t new_cluster_number = 1;
-        for (auto &vector : cluster->vectors)
-        {
-            if (flag.insert(std::make_pair(vector.first, new_cluster_number)).second)
-            {
-                auto new_cluster = std::make_shared<Cluster>(cluster->layer);
-                vector.second->cluster = new_cluster;
-                new_cluster->vectors.insert(vector);
-                auto waiting_vectors = std::queue<uint64_t>();
-                waiting_vectors.push(vector.first);
-                while (!waiting_vectors.empty())
+                uint64_t vector_global_offset = waiting_vectors.front();
+                waiting_vectors.pop();
+                for (auto &out_neighbor : cluster->vectors.find(vector_global_offset)->second->out)
                 {
-                    uint64_t vector_global_offset = waiting_vectors.front();
-                    waiting_vectors.pop();
-                    for (auto &out_neighbor : cluster->vectors.find(vector_global_offset)->second->out)
+                    auto temporary_vector_pointer = out_neighbor.second.lock();
+                    if (flag.insert(std::make_pair(temporary_vector_pointer->global_offset, new_cluster_number)).second)
                     {
-                        auto temporary_vector_pointer = out_neighbor.second.lock();
-                        if (flag.insert(std::make_pair(temporary_vector_pointer->global_offset, new_cluster_number))
-                                .second)
-                        {
-                            temporary_vector_pointer->cluster = new_cluster;
-                            new_cluster->vectors.insert(
-                                std::make_pair(temporary_vector_pointer->global_offset, temporary_vector_pointer));
-                        }
-                    }
-                    for (auto &in_neighbor : cluster->vectors.find(vector_global_offset)->second->in)
-                    {
-                        if (flag.insert(std::make_pair(in_neighbor.first, new_cluster_number)).second)
-                        {
-                            in_neighbor.second.lock()->cluster = new_cluster;
-                            new_cluster->vectors.insert(in_neighbor);
-                        }
+                        temporary_vector_pointer->cluster = new_cluster;
+                        new_cluster->vectors.insert(
+                            std::make_pair(temporary_vector_pointer->global_offset, temporary_vector_pointer));
                     }
                 }
-                new_clusters.push_back(new_cluster);
-                ++new_cluster_number;
+                for (auto &in_neighbor : cluster->vectors.find(vector_global_offset)->second->in)
+                {
+                    if (flag.insert(std::make_pair(in_neighbor.first, new_cluster_number)).second)
+                    {
+                        in_neighbor.second.lock()->cluster = new_cluster;
+                        new_cluster->vectors.insert(in_neighbor);
+                    }
+                }
             }
-            if (flag.size() == cluster->vectors.size())
-            {
-                break;
-            }
+            new_clusters.push_back(new_cluster);
+            ++new_cluster_number;
         }
-        auto temporary = std::unordered_set<uint64_t>();
-        std::swap(temporary, cluster->selected_vectors);
-        for (auto &selected_vector : temporary)
+        if (flag.size() == cluster->vectors.size())
         {
-            new_clusters[flag.find(selected_vector)->second]->selected_vectors.insert(selected_vector);
+            break;
         }
+    }
+    for (auto &selected_vector : cluster->selected_vectors)
+    {
+        new_clusters[flag.find(selected_vector)->second]->selected_vectors.insert(selected_vector);
     }
     return new_clusters;
 }
@@ -250,6 +224,7 @@ std::vector<std::shared_ptr<Cluster>> calculate_clusters(const std::shared_ptr<C
 std::vector<std::shared_ptr<Vector_In_Cluster>> divide_a_cluster(const std::shared_ptr<Cluster> &cluster)
 {
     auto new_clusters = calculate_clusters(cluster);
+    auto layer = cluster->layer.lock();
     auto selected_vectors = std::vector<std::shared_ptr<Vector_In_Cluster>>();
     // 如果分裂成多个簇
     if (new_clusters.size() > 1)
@@ -259,21 +234,27 @@ std::vector<std::shared_ptr<Vector_In_Cluster>> divide_a_cluster(const std::shar
             auto selected_vector =
                 std::make_shared<Vector_In_Cluster>(new_clusters[0]->vectors.begin()->second->global_offset);
             selected_vectors.push_back(selected_vector);
-            selected_vector->lower_layer = new_clusters[0]->vectors[0];
+            selected_vector->lower_layer = new_clusters[0]->vectors.begin()->second;
             new_clusters[0]->selected_vectors.insert(selected_vector->global_offset);
         }
-        auto layer = cluster->layer.lock();
         for (auto new_cluster_offset = 1; new_cluster_offset < new_clusters.size(); ++new_cluster_offset)
         {
             if (new_clusters[new_cluster_offset]->selected_vectors.empty())
             {
-                auto selected_vector =
-                    std::make_shared<Vector_In_Cluster>(new_clusters[new_cluster_offset]->vectors[0]->global_offset);
-                selected_vector->lower_layer = new_clusters[new_cluster_offset]->vectors[0];
+                auto selected_vector = std::make_shared<Vector_In_Cluster>(
+                    new_clusters[new_cluster_offset]->vectors.begin()->second->global_offset);
+                selected_vector->lower_layer = new_clusters[new_cluster_offset]->vectors.begin()->second;
                 selected_vectors.push_back(selected_vector);
                 new_clusters[new_cluster_offset]->selected_vectors.insert(selected_vector->global_offset);
             }
             layer->clusters.push_back(new_clusters[new_cluster_offset]);
+        }
+    }
+    for (auto &old_cluster : layer->clusters)
+    {
+        if (old_cluster == cluster)
+        {
+            old_cluster = new_clusters[0];
         }
     }
     return selected_vectors;
@@ -352,8 +333,7 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
             if (flags.insert(vector.first).second)
             {
                 waiting_vectors.insert(std::make_pair(
-                    index.distance_calculation(query_vector, index.vectors[vector.second.lock()->global_offset].data),
-                    vector.second));
+                    index.distance_calculation(query_vector, index.vectors[vector.first].data), vector.second));
             }
         }
     }
