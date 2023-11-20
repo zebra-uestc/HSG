@@ -364,6 +364,7 @@ template <typename Dimension_Type>
 void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &new_vector,
             const uint64_t target_layer_number)
 {
+    // 如果目标层不存在
     if (target_layer_number == index.layers.size())
     {
         auto new_layer = std::make_shared<Layer>();
@@ -391,16 +392,12 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
         // 每个簇之间是不连通的
         // 所以要进行多次计算
         // 最后汇总计算结果
-        std::map<float, std::weak_ptr<Vector_In_Cluster>> one_layer_neighbors;
+        auto one_layer_neighbors = std::map<float, std::weak_ptr<Vector_In_Cluster>>();
         for (auto &start_vector : every_layer_neighbors.top())
         {
             auto one_cluster_neighbors = nearest_neighbors(index, index.vectors[new_vector->global_offset].data,
                                                            start_vector.second.lock()->lower_layer.lock());
             one_layer_neighbors.insert(one_cluster_neighbors.begin(), one_cluster_neighbors.end());
-            //            for (auto &neighbor : one_cluster_neighbors)
-            //            {
-            //                one_layer_neighbors.insert(neighbor);
-            //            }
             auto last_neighbor = one_layer_neighbors.begin();
             std::advance(last_neighbor, index.max_connect);
             one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
@@ -461,7 +458,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                             ++offset;
                         }
                     }
-                    else if (index.max_connect < neighbor_vector->out.size())
+                    if (index.max_connect < neighbor_vector->out.size())
                     {
                         neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);
                         neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
@@ -478,7 +475,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                 // 如果邻居向量指向新的向量
                 if (neighbor_vector->out.upper_bound(neighbor.first) != neighbor_vector->out.end())
                 {
-                    // 新向量是距离邻居向量距离最短的向量
+                    // 如果新向量是距离邻居向量距离最短的向量
                     if (neighbor.first < neighbor_vector->out.begin()->first)
                     {
                         uint64_t offset = 1;
@@ -502,7 +499,8 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                             ++offset;
                         }
                     }
-                    else if (index.max_connect == neighbor_vector->out.size())
+                    // 如果邻居向量的出度已经等于索引的最大连接限制
+                    if (index.max_connect == neighbor_vector->out.size())
                     {
                         neighbor_vector->out.rbegin()->second.lock()->in.erase(neighbor_vector->global_offset);
                         neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
@@ -636,7 +634,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     }
     index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
     auto new_vector = std::make_shared<Vector_In_Cluster>(inserted_vector_global_offset);
-    insert(index, std::move(new_vector), 0);
+    insert(index, new_vector, 0);
 }
 
 } // namespace nnhnsw
