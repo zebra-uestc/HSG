@@ -7,7 +7,7 @@
 #include "bruteforce.h"
 #include "nnhnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &result, const std::multimap<float, uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &result, const std::map<float, uint64_t> &query_result)
 {
     uint64_t hit = 0;
     auto query_result_iterator = query_result.begin();
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
     for (auto i = 0; i < query.size(); ++i)
     {
-        auto query_result = index.query(query[i], neighbors[i].size());
+        auto query_result = nnhnsw::query<float>(index, query[i], neighbors[i].size());
         auto hit = verify(neighbors[i], query_result);
         std::cout << "recall: " << hit / neighbors[i].size() << std::endl;
     }
