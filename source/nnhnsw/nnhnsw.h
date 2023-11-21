@@ -124,15 +124,30 @@ template <typename Dimension_Type> class Index
         // 判断原始向量数据是否为空
         if (!vectors.empty() && !vectors.begin()->empty())
         {
+            //            {
+            //                uint64_t pause = 430;
+            //                for (auto i = 0; i < pause; ++i)
+            //                {
+            //                    std::cout << "inserting " << i << std::endl;
+            //                    insert(*this, vectors[i]);
+            //                    std::cout << "insert done " << std::endl;
+            //                    std::cout << this->layers.size() << "  " << this->layers[this->layers.size() -
+            //                    1]->clusters.size()
+            //                              << std::endl;
+            //                }
+            //                std::cout << "inserting " << pause << std::endl;
+            //                insert(*this, vectors[pause]);
+            //                std::cout << "insert done " << std::endl;
+            //                for (auto i = pause; i < vectors.size(); ++i)
+            //                {
+            //                    std::cout << "inserting " << i << std::endl;
+            //                    insert(*this, vectors[i]);
+            //                    std::cout << "insert done " << std::endl;
+            //                }
+            //            }
             for (auto &vector : vectors)
             {
                 insert(*this, vector);
-                uint64_t i = 0;
-                for (auto &cluster : this->layers[0]->clusters)
-                {
-                    i += cluster->vectors.size();
-                }
-                std::cout << this->vectors.size() << "  " << i << std::endl;
             }
         }
     }
@@ -345,8 +360,7 @@ std::map<float, std::weak_ptr<Vector_In_Cluster>> nearest_neighbors(const Index<
 }
 
 template <typename Dimension_Type>
-void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &new_vector,
-            const uint64_t target_layer_number)
+void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &new_vector, uint64_t target_layer_number)
 {
     // 如果目标层不存在
     if (target_layer_number == index.layers.size())
@@ -497,6 +511,17 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                         }
                         ++offset;
                     }
+                    // 如果邻居向量的出度已经等于索引的最大连接限制
+                    if (index.max_connect == neighbor_vector->out.size())
+                    {
+                        std::prev(neighbor_vector->out.end())->second.lock()->in.erase(neighbor_vector->global_offset);
+                        neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
+                        auto selected_vectors = divide_a_cluster(neighbor_vector->cluster.lock());
+                        for (auto &selected_vector : selected_vectors)
+                        {
+                            insert(index, selected_vector, target_layer_number + 1);
+                        }
+                    }
                     neighbor_vector->out.insert(std::make_pair(neighbor.first, new_vector));
                     new_vector->in.insert(std::make_pair(neighbor_vector->global_offset, neighbor_vector));
                 }
@@ -509,16 +534,12 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                 // 如果邻居向量指向新的向量
                 else if (neighbor_vector->out.upper_bound(neighbor.first) != neighbor_vector->out.end())
                 {
-                    // 如果邻居向量的出度已经等于索引的最大连接限制
-                    if (index.max_connect == neighbor_vector->out.size())
+                    std::prev(neighbor_vector->out.end())->second.lock()->in.erase(neighbor_vector->global_offset);
+                    neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
+                    auto selected_vectors = divide_a_cluster(neighbor_vector->cluster.lock());
+                    for (auto &selected_vector : selected_vectors)
                     {
-                        std::prev(neighbor_vector->out.end())->second.lock()->in.erase(neighbor_vector->global_offset);
-                        neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
-                        auto selected_vectors = divide_a_cluster(neighbor_vector->cluster.lock());
-                        for (auto &selected_vector : selected_vectors)
-                        {
-                            insert(index, selected_vector, target_layer_number + 1);
-                        }
+                        insert(index, selected_vector, target_layer_number + 1);
                     }
                     neighbor_vector->out.insert(std::make_pair(neighbor.first, new_vector));
                     new_vector->in.insert(std::make_pair(neighbor_vector->global_offset, neighbor_vector));
@@ -537,6 +558,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                         index.layers.pop_back();
                     }
                     base_cluster->selected_vectors.clear();
+                    insert_to_upper_layer = false;
                 }
                 else
                 {
@@ -551,6 +573,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
             temporary->lower_layer = new_vector;
             new_vector = temporary;
             every_layer_neighbors.pop();
+            ++target_layer_number;
         }
         else
         {

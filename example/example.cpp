@@ -117,10 +117,18 @@ int main(int argc, char **argv)
     //        auto hit = verify(neighbors[i], query_result);
     //        std::cout << "recall: " << hit << std::endl;
     //    }
+    auto begin = std::chrono::high_resolution_clock::now();
     nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "build index(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()
+              << std::endl;
     for (auto i = 0; i < query.size(); ++i)
     {
+        auto begin = std::chrono::high_resolution_clock::now();
         auto query_result = nnhnsw::query<float>(index, query[i], neighbors[i].size());
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "one query(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()
+                  << std::endl;
         auto hit = verify(neighbors[i], query_result);
         std::cout << "recall: " << hit / neighbors[i].size() << std::endl;
     }
