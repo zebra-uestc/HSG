@@ -127,6 +127,12 @@ template <typename Dimension_Type> class Index
             for (auto &vector : vectors)
             {
                 insert(*this, vector);
+                uint64_t i = 0;
+                for (auto &cluster : this->layers[0]->clusters)
+                {
+                    i += cluster->vectors.size();
+                }
+                std::cout << this->vectors.size() << "  " << i << std::endl;
             }
         }
     }
@@ -252,6 +258,7 @@ std::vector<std::shared_ptr<Vector_In_Cluster>> divide_a_cluster(const std::shar
         if (old_cluster == cluster)
         {
             old_cluster = new_clusters[0];
+            break;
         }
     }
     return selected_vectors;
@@ -426,6 +433,11 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                                 }
                                 neighbor_vector->out.erase(iterator, neighbor_vector->out.end());
                                 auto selected_vectors = divide_a_cluster(base_cluster);
+                                // 因为对于新向量和目标向量在同一个簇的情况下
+                                // 分裂一个簇会导致base_cluster指向一个只有它指向的簇
+                                // 原来指向的簇已经不在索引中
+                                // 所要以重置base_cluster的值
+                                base_cluster = every_layer_neighbors.top().begin()->second.lock()->cluster.lock();
                                 for (auto &selected_vector : selected_vectors)
                                 {
                                     insert(index, selected_vector, target_layer_number + 1);
@@ -445,6 +457,11 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                         std::prev(neighbor_vector->out.end())->second.lock()->in.erase(neighbor_vector->global_offset);
                         neighbor_vector->out.erase(std::prev(neighbor_vector->out.end()));
                         auto selected_vectors = divide_a_cluster(base_cluster);
+                        // 因为对于新向量和目标向量在同一个簇的情况下
+                        // 分裂一个簇会导致base_cluster指向一个只有它指向的簇
+                        // 原来指向的簇已经不在索引中
+                        // 所要以重置base_cluster的值
+                        base_cluster = every_layer_neighbors.top().begin()->second.lock()->cluster.lock();
                         for (auto &selected_vector : selected_vectors)
                         {
                             insert(index, selected_vector, target_layer_number + 1);
@@ -460,7 +477,9 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                     // 如果新向量是距离邻居向量距离最短的向量
                     if (neighbor.first < neighbor_vector->out.begin()->first)
                     {
-                        uint64_t offset = 1;
+                        // 因为此时邻向量居还没指向有新向量
+                        // 所以偏移量从2开始
+                        uint64_t offset = 2;
                         for (auto iterator = neighbor_vector->out.begin(); iterator != neighbor_vector->out.end();
                              ++iterator)
                         {
@@ -522,12 +541,12 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
             auto temporary = std::make_shared<Vector_In_Cluster>(new_vector->global_offset);
             temporary->lower_layer = new_vector;
             new_vector = temporary;
+            every_layer_neighbors.pop();
         }
         else
         {
             break;
         }
-        every_layer_neighbors.pop();
     }
 }
 
