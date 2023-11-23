@@ -76,6 +76,15 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
 
 int main(int argc, char **argv)
 {
+#if defined(__AVX512F__)
+    std::cout << "AVX512 supported. " << std::endl;
+#elif defined(__AVX__)
+    std::cout << "AVX supported. " << std::endl;
+#elif defined(__SSE__)
+    std::cout << "SSE supported. " << std::endl;
+#else
+    std::cout << "no SIMD supported. " << std::endl;
+#endif
     auto train = load_vector(argv[1]);
     //    for (auto &i : vectors)
     //    {
@@ -120,16 +129,16 @@ int main(int argc, char **argv)
     auto begin = std::chrono::high_resolution_clock::now();
     nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, 20, 1);
     auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "build index(us): " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
-              << std::endl;
+    std::cout << "building index costs(us): "
+              << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
     auto hit_results = std::vector<uint64_t>();
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
         auto query_result = nnhnsw::query<float>(index, test[i], 10);
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "one query(us): " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
-                  << std::endl;
+        std::cout << "one query costs(us): "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         auto hit = verify(neighbors[i], query_result);
         hit_results.push_back(hit);
         std::cout << "hit: " << hit << std::endl;
@@ -142,5 +151,24 @@ int main(int argc, char **argv)
         }
         std::cout << "total hit: " << total_hit << std::endl;
     }
+    //    for (auto i = 0; i < 10; ++i)
+    //    {
+    //        auto begin = std::chrono::high_resolution_clock::now();
+    //        auto query_result = nnhnsw::query<float>(index, train[i], 10);
+    //        auto end = std::chrono::high_resolution_clock::now();
+    //        std::cout << "one query costs(us): "
+    //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+    //        auto hit = verify(std::vector<uint64_t>(1, i), query_result);
+    //        hit_results.push_back(hit);
+    //        std::cout << "hit: " << hit << std::endl;
+    //    }
+    //    {
+    //        uint64_t total_hit = 0;
+    //        for (auto &hit : hit_results)
+    //        {
+    //            total_hit += hit;
+    //        }
+    //        std::cout << "total hit: " << total_hit << std::endl;
+    //    }
     return 0;
 }
