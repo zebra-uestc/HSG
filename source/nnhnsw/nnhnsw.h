@@ -124,27 +124,33 @@ template <typename Dimension_Type> class Index
         // 判断原始向量数据是否为空
         if (!vectors.empty() && !vectors.begin()->empty())
         {
-            {
-                //                uint64_t pause = 1000;
-                //                for (auto i = 0; i < pause; ++i)
-                //                {
-                //                    std::cout << "inserting " << i << std::endl;
-                //                    insert(*this, vectors[i]);
-                //                    std::cout << "insert done " << std::endl;
-                //                }
-                //                std::cout << "inserting " << pause << std::endl;
-                //                insert(*this, vectors[pause]);
-                //                std::cout << "insert done " << std::endl;
-                //                for (auto i = pause; i < vectors.size(); ++i)
-                //                {
-                //                    std::cout << "inserting " << i << std::endl;
-                //                    insert(*this, vectors[i]);
-                //                    std::cout << "insert done " << std::endl;
-                //                }
-            }
+            //            uint64_t pause = 1000;
+            //            for (auto i = 0; i < pause; ++i)
+            //            {
+            //                std::cout << "inserting " << i << std::endl;
+            //                auto begin = std::chrono::high_resolution_clock::now();
+            //                insert(*this, vectors[i]);
+            //                auto end = std::chrono::high_resolution_clock::now();
+            //                std::cout << "inserting one vector costs(us): "
+            //                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+            //                          std::endl;
+            //            }
+            //            std::cout << "inserting " << pause << std::endl;
+            //            insert(*this, vectors[pause]);
+            //            std::cout << "insert done " << std::endl;
+            //            for (auto i = pause; i < vectors.size(); ++i)
+            //            {
+            //                std::cout << "inserting " << i << std::endl;
+            //                insert(*this, vectors[i]);
+            //                std::cout << "insert done " << std::endl;
+            //            }
             for (auto &vector : vectors)
             {
+                auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vector);
+                auto end = std::chrono::high_resolution_clock::now();
+                std::cout << "inserting one vector costs(us): "
+                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
             }
         }
     }
