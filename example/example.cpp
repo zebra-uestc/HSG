@@ -7,13 +7,13 @@
 #include "bruteforce.h"
 #include "nnhnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &result, const std::map<float, uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
 {
     uint64_t hit = 0;
     auto query_result_iterator = query_result.begin();
-    for (auto &result_iterator : result)
+    for (auto &neighbor : neighbors)
     {
-        if (result_iterator == query_result_iterator->second)
+        if (neighbor == query_result_iterator->second)
         {
             ++hit;
             ++query_result_iterator;
@@ -76,7 +76,7 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
 
 int main(int argc, char **argv)
 {
-    auto vectors = load_vector(argv[1]);
+    auto train = load_vector(argv[1]);
     //    for (auto &i : vectors)
     //    {
     //        for (auto &j : i)
@@ -86,7 +86,7 @@ int main(int argc, char **argv)
     //        std::cout << std::endl;
     //    }
     //    std::cout << vectors.size() << "  " << vectors.begin()->size() << std::endl;
-    auto query = load_vector(argv[2]);
+    auto test = load_vector(argv[2]);
     //    for (auto &i : query)
     //    {
     //        for (auto &j : i)
@@ -118,19 +118,29 @@ int main(int argc, char **argv)
     //        std::cout << "recall: " << hit << std::endl;
     //    }
     auto begin = std::chrono::high_resolution_clock::now();
-    nnhnsw::Index<float> index(vectors, Distance_Type::Euclidean2, 10, 1);
+    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, 20, 1);
     auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "build index(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()
+    std::cout << "build index(us): " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
               << std::endl;
-    for (auto i = 0; i < query.size(); ++i)
+    auto hit_results = std::vector<uint64_t>();
+    for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = nnhnsw::query<float>(index, query[i], neighbors[i].size());
+        auto query_result = nnhnsw::query<float>(index, test[i], 10);
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "one query(ms): " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count()
+        std::cout << "one query(us): " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
                   << std::endl;
         auto hit = verify(neighbors[i], query_result);
-        std::cout << "recall: " << hit / neighbors[i].size() << std::endl;
+        hit_results.push_back(hit);
+        std::cout << "hit: " << hit << std::endl;
+    }
+    {
+        uint64_t total_hit = 0;
+        for (auto &hit : hit_results)
+        {
+            total_hit += hit;
+        }
+        std::cout << "total hit: " << total_hit << std::endl;
     }
     return 0;
 }
