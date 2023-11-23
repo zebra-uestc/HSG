@@ -124,27 +124,24 @@ template <typename Dimension_Type> class Index
         // 判断原始向量数据是否为空
         if (!vectors.empty() && !vectors.begin()->empty())
         {
-            //            {
-            //                uint64_t pause = 430;
-            //                for (auto i = 0; i < pause; ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    insert(*this, vectors[i]);
-            //                    std::cout << "insert done " << std::endl;
-            //                    std::cout << this->layers.size() << "  " << this->layers[this->layers.size() -
-            //                    1]->clusters.size()
-            //                              << std::endl;
-            //                }
-            //                std::cout << "inserting " << pause << std::endl;
-            //                insert(*this, vectors[pause]);
-            //                std::cout << "insert done " << std::endl;
-            //                for (auto i = pause; i < vectors.size(); ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    insert(*this, vectors[i]);
-            //                    std::cout << "insert done " << std::endl;
-            //                }
-            //            }
+            {
+                //                uint64_t pause = 1000;
+                //                for (auto i = 0; i < pause; ++i)
+                //                {
+                //                    std::cout << "inserting " << i << std::endl;
+                //                    insert(*this, vectors[i]);
+                //                    std::cout << "insert done " << std::endl;
+                //                }
+                //                std::cout << "inserting " << pause << std::endl;
+                //                insert(*this, vectors[pause]);
+                //                std::cout << "insert done " << std::endl;
+                //                for (auto i = pause; i < vectors.size(); ++i)
+                //                {
+                //                    std::cout << "inserting " << i << std::endl;
+                //                    insert(*this, vectors[i]);
+                //                    std::cout << "insert done " << std::endl;
+                //                }
+            }
             for (auto &vector : vectors)
             {
                 insert(*this, vector);
@@ -612,8 +609,8 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     else
     {
         // 记录被插入向量每一层中距离最近的top_k个邻居向量
-        std::map<float, std::weak_ptr<Vector_In_Cluster>> every_layer_neighbors =
-            nearest_neighbors(index, query_vector, index.layers[0]->clusters[0]->vectors.begin()->second, top_k);
+        std::map<float, std::weak_ptr<Vector_In_Cluster>> every_layer_neighbors = nearest_neighbors(
+            index, query_vector, index.layers[index.layers.size() - 1]->clusters[0]->vectors.begin()->second, top_k);
         // 逐层扫描
         // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
         // 所以不需要实际的层和簇
@@ -631,7 +628,7 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
                     nearest_neighbors(index, query_vector, start_vector.second.lock()->lower_layer.lock(), top_k);
                 one_layer_neighbors.insert(temporary_nearest_neighbors.begin(), temporary_nearest_neighbors.end());
                 auto last_neighbor = one_layer_neighbors.begin();
-                std::advance(last_neighbor, index.max_connect);
+                std::advance(last_neighbor, top_k);
                 one_layer_neighbors.erase(last_neighbor, one_layer_neighbors.end());
             }
             every_layer_neighbors.clear();
