@@ -20,10 +20,10 @@ namespace euclidean2
 template <typename Dimension_Type>
 float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
 {
-#if defined(__AVX512f__)
+#if defined(__AVX512F__)
     auto *vector1_pointer = (float *)vector1.data();
     auto *vector2_pointer = (float *)vector2.data();
-    float temporary_result[16];
+    float __attribute__((aligned(64))) temporary_result[16];
     const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
     __m512 difference, part_vevtor1, part_vevtor2;
     __m512 sum = _mm512_set1_ps(0);
@@ -50,7 +50,7 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
 #elif defined(__AVX__)
     auto *vector1_pointer = (float *)vector1.data();
     auto *vector2_pointer = (float *)vector2.data();
-    float temporary_result[8];
+    float __attribute__((aligned(32))) temporary_result[8];
     const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
     __m256 difference, part_vector1, part_vector2;
     __m256 sum = _mm256_set1_ps(0);
@@ -83,7 +83,7 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
 #elif defined(__SSE__)
     auto *vector1_pointer = (float *)vector1.data();
     auto *vector2_pointer = (float *)vector2.data();
-    float temporary_result[8];
+    float __attribute__((aligned(32))) temporary_result[8];
     const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
     __m256 difference, part_vector1, part_vector2;
     __m256 sum = _mm128_set1_ps(0);
