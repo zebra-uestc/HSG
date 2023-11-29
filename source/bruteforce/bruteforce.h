@@ -8,12 +8,13 @@
 
 namespace bruteforce
 {
+
 template <typename Dimension_Type>
 std::map<float, uint64_t> search(const std::vector<std::vector<Dimension_Type>> &vectors,
                                  const std::vector<Dimension_Type> &query, const uint64_t k)
 {
     std::map<Dimension_Type, uint64_t> result;
-    for (auto i = 0; i < k * 2 && i < vectors.size(); ++i)
+    for (auto i = 0; i < k && i < vectors.size(); ++i)
     {
         auto distance = euclidean2::distance(vectors[i], query);
         result.emplace(distance, i);
@@ -29,4 +30,5 @@ std::map<float, uint64_t> search(const std::vector<std::vector<Dimension_Type>> 
     }
     return result;
 }
+
 } // namespace bruteforce

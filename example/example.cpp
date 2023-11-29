@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
     auto begin = std::chrono::high_resolution_clock::now();
-    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, 10, 1);
+    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, 2, 1, 10, 10);
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "building index costs(us): "
               << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
