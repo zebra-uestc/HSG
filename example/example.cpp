@@ -86,18 +86,38 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    auto begin = std::chrono::high_resolution_clock::now();
-    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, 10, 5, 3);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::cout << "building index costs(us): "
-              << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+    uint64_t max_connect = 10;
+    uint64_t relaxed_monotonicity = 5;
+    uint64_t step = 2;
+    uint64_t query_relaxed_monotonicity = 30;
+    if (argc > 4)
+    {
+        max_connect = std::stoull(argv[4]);
+    }
+    if (argc > 5)
+    {
+        relaxed_monotonicity = std::stoull(argv[5]);
+    }
+    if (argc > 6)
+    {
+        step = std::stoull(argv[6]);
+    }
+    if (argc > 7)
+    {
+        query_relaxed_monotonicity = std::stoull(argv[7]);
+    }
+    std::cout << "max connect: " << max_connect << std::endl;
+    std::cout << "relaxed monotonicity: " << relaxed_monotonicity << std::endl;
+    std::cout << "step: " << step << std::endl;
+    std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
+    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2, max_connect, relaxed_monotonicity, step);
     uint64_t total_hit = 0;
     uint64_t total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
     {
-        begin = std::chrono::high_resolution_clock::now();
-        auto query_result = nnhnsw::query<float>(index, test[i], neighbors[i].size());
-        end = std::chrono::high_resolution_clock::now();
+        auto begin = std::chrono::high_resolution_clock::now();
+        auto query_result = nnhnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto end = std::chrono::high_resolution_clock::now();
         std::cout << "one query costs(us): "
                   << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
@@ -107,25 +127,5 @@ int main(int argc, char **argv)
     }
     std::cout << "average time: " << total_time / test.size() << std::endl;
     std::cout << "total hit: " << total_hit << std::endl;
-
-    // debug
-    //    {
-    //        for (auto i = 0; i < 10; ++i)
-    //        {
-    //            auto begin = std::chrono::high_resolution_clock::now();
-    //            auto query_result = nnhnsw::query<float>(index, train[i], 100);
-    //            auto end = std::chrono::high_resolution_clock::now();
-    //            std::cout << "one query costs(us): "
-    //                      << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
-    //            auto hit = verify(std::vector<uint64_t>(1, i), query_result);
-    //            total_hit += hit;
-    //            std::cout << "hit: " << hit << std::endl;
-    //        }
-    //        {
-    //            std::cout << "total hit: " << total_hit << std::endl;
-    //        }
-    //    }
-    // debug
-
     return 0;
 }

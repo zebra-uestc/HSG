@@ -45,7 +45,7 @@ class Vector_In_Cluster
     std::map<float, std::weak_ptr<Vector_In_Cluster>> out;
     // 指向该向量的邻居向量
     std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> in;
-    //
+    // 指向该向量所在的层
     std::weak_ptr<Layer> layer;
 
     explicit Vector_In_Cluster(const uint64_t global_offset)
@@ -73,7 +73,7 @@ class Layer
     // 而该剪枝操作会导致图的不连通
     // 则不进行该剪枝操作，记录这条边
     // 在之后的向量插入完成后再检验这些边如果删去是否影响图的连通性
-    std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> temporary_connecting;
+    //    std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>> temporary_connecting;
 
     Layer() = default;
 };
@@ -137,14 +137,18 @@ template <typename Dimension_Type> class Index
             //            }
             // debug
 
+            uint64_t total_time = 0;
             for (auto global_offset = 0; global_offset < vectors.size(); ++global_offset)
             {
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
+                //                          begin).count() << std::endl;
+                total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
+            std::cout << "building index consts(us): " << total_time << std::endl;
             for (auto i = 0; i < this->layers.size(); ++i)
             {
                 std::cout << "layers[" << i << "]: " << this->layers[i]->vectors.size() << " vectors. " << std::endl;
@@ -156,8 +160,11 @@ template <typename Dimension_Type> class Index
 namespace
 {
 
-bool connected(const std::shared_ptr<Vector_In_Cluster> &start, const std::shared_ptr<Layer> &layer)
+bool connected(const std::shared_ptr<Vector_In_Cluster> &start,
+               std::unordered_map<std::shared_ptr<Vector_In_Cluster>,
+                                  std::pair<float, std::shared_ptr<Vector_In_Cluster>>> &deleted_edges)
 {
+    auto layer = start->layer.lock();
     auto last = std::unordered_set<std::shared_ptr<Vector_In_Cluster>>();
     auto next = std::unordered_set<std::shared_ptr<Vector_In_Cluster>>();
     auto flag = std::unordered_set<uint64_t>();
@@ -170,6 +177,7 @@ bool connected(const std::shared_ptr<Vector_In_Cluster> &start, const std::share
             for (const auto &neighbor : vector->out)
             {
                 auto neighbor_vector = neighbor.second.lock();
+                deleted_edges.erase(neighbor_vector);
                 if (flag.insert(neighbor_vector->global_offset).second)
                 {
                     next.insert(neighbor_vector);
@@ -178,13 +186,14 @@ bool connected(const std::shared_ptr<Vector_In_Cluster> &start, const std::share
             for (const auto &neighbor : vector->in)
             {
                 auto neighbor_vector = neighbor.second.lock();
+                deleted_edges.erase(neighbor_vector);
                 if (flag.insert(neighbor_vector->global_offset).second)
                 {
                     next.insert(neighbor_vector);
                 }
             }
         }
-        if (flag.size() == layer->vectors.size())
+        if (deleted_edges.empty())
         {
             return true;
         }
@@ -355,6 +364,8 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
     // 插入向量
     while (!every_layer_neighbors.empty())
     {
+        auto deleted_edges = std::unordered_map<std::shared_ptr<Vector_In_Cluster>,
+                                                std::pair<float, std::shared_ptr<Vector_In_Cluster>>>();
         auto &layer = index.layers[target_layer_number];
         new_vector->layer = layer;
         layer->vectors.insert(std::pair(new_vector->global_offset, new_vector));
@@ -379,16 +390,20 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                 auto temporary = neighbor_vector->out.begin();
                 std::advance(temporary, index.max_connect);
                 auto record = *temporary;
+                deleted_edges.insert(
+                    std::make_pair(neighbor_vector, std::make_pair(record.first, record.second.lock())));
                 neighbor_vector->out.erase(temporary);
                 record.second.lock()->in.erase(neighbor_vector->global_offset);
-                if (!connected(neighbor_vector, layer))
-                {
-                    neighbor_vector->out.insert(record);
-                    record.second.lock()->in.insert(std::make_pair(neighbor_vector->global_offset, neighbor_vector));
-                    layer->temporary_connecting.insert(std::make_pair(neighbor_vector->global_offset, neighbor_vector));
-                }
             }
             ++neighbor_iterator;
+        }
+        if (!connected(new_vector, deleted_edges))
+        {
+            for (const auto &edge : deleted_edges)
+            {
+                edge.first->out.insert(edge.second);
+                edge.second.second->in.insert(std::make_pair(edge.first->global_offset, edge.first));
+            }
         }
         // 如果新向量应该被插入上一层中
         if (insert_to_upper_layer(new_vector, index.step))
@@ -422,7 +437,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
 // 查询
 template <typename Dimension_Type>
 std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::vector<Dimension_Type> &query_vector,
-                                uint64_t top_k)
+                                uint64_t top_k, uint64_t relaxed_monotonicity = 0)
 {
     if (index.vectors.empty())
     {
@@ -432,6 +447,10 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     {
         throw std::invalid_argument("The dimension of query vector is not "
                                     "equality with vectors in index. ");
+    }
+    if (relaxed_monotonicity == 0)
+    {
+        relaxed_monotonicity = top_k / 2;
     }
     std::map<float, uint64_t> result;
     // 如果索引中的向量数量小于top-k
@@ -448,8 +467,9 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     {
         if (index.layers.size() == 1)
         {
-            auto temporary = nearest_neighbors(
-                index, query_vector, index.layers[index.layers.size() - 1]->vectors.begin()->second, 100, 100);
+            auto temporary =
+                nearest_neighbors(index, query_vector, index.layers[index.layers.size() - 1]->vectors.begin()->second,
+                                  100, relaxed_monotonicity);
             for (const auto &neighbor : temporary)
             {
                 result.insert(std::make_pair(neighbor.first, neighbor.second.lock()->global_offset));
@@ -469,7 +489,8 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
                     nearest_neighbors(index, query_vector, temporary.begin()->second.lock()->lower_layer.lock(), 1, 5);
             }
             for (const auto &neighbor :
-                 nearest_neighbors(index, query_vector, temporary.begin()->second.lock()->lower_layer.lock(), 100, 100))
+                 nearest_neighbors(index, query_vector, temporary.begin()->second.lock()->lower_layer.lock(), 100,
+                                   relaxed_monotonicity))
             {
                 result.insert(std::make_pair(neighbor.first, neighbor.second.lock()->global_offset));
             }
