@@ -51,8 +51,6 @@ class Vector_In_Cluster
     explicit Vector_In_Cluster(const uint64_t global_offset)
     {
         this->global_offset = global_offset;
-        this->out = std::map<float, std::weak_ptr<Vector_In_Cluster>>();
-        this->in = std::unordered_map<uint64_t, std::weak_ptr<Vector_In_Cluster>>();
     }
 };
 
@@ -103,7 +101,6 @@ template <typename Dimension_Type> class Index
     Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type,
           const uint64_t max_connect = 10, const uint64_t relaxed_monotonicity_factor = 10, uint64_t step = 3)
     {
-        this->vectors = std::vector<Vector<Dimension_Type>>();
         this->max_connect = max_connect;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
         this->relaxed_monotonicity_factor = relaxed_monotonicity_factor;
@@ -143,8 +140,9 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
+                //                          begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -161,7 +159,8 @@ namespace
 
 bool connected(const std::shared_ptr<Vector_In_Cluster> &start,
                std::unordered_map<std::shared_ptr<Vector_In_Cluster>,
-                                  std::pair<float, std::shared_ptr<Vector_In_Cluster>>> &deleted_edges)
+                                  std::pair<float, std::shared_ptr<Vector_In_Cluster>>> &deleted_edges,
+               const uint64_t step)
 {
     auto layer = start->layer.lock();
     auto last = std::unordered_set<std::shared_ptr<Vector_In_Cluster>>();
@@ -169,7 +168,7 @@ bool connected(const std::shared_ptr<Vector_In_Cluster> &start,
     auto flag = std::unordered_set<uint64_t>();
     flag.insert(start->global_offset);
     last.insert(start);
-    while (!last.empty())
+    for (auto round = 0; round < step * 2; ++round)
     {
         for (const auto &vector : last)
         {
@@ -396,7 +395,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
             }
             ++neighbor_iterator;
         }
-        if (!connected(new_vector, deleted_edges))
+        if (!connected(new_vector, deleted_edges, index.step))
         {
             for (const auto &edge : deleted_edges)
             {
