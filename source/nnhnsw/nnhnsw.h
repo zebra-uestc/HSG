@@ -101,7 +101,7 @@ template <typename Dimension_Type> class Index
     uint64_t step{};
 
     Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type,
-          const uint64_t max_connect = 2, const uint64_t relaxed_monotonicity_factor = 10, uint64_t step = 5)
+          const uint64_t max_connect = 10, const uint64_t relaxed_monotonicity_factor = 10, uint64_t step = 3)
     {
         this->vectors = std::vector<Vector<Dimension_Type>>();
         this->max_connect = max_connect;
@@ -143,9 +143,8 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
-                //                          begin).count() << std::endl;
+                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -391,7 +390,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
                 std::advance(temporary, index.max_connect);
                 auto record = *temporary;
                 deleted_edges.insert(
-                    std::make_pair(neighbor_vector, std::make_pair(record.first, record.second.lock())));
+                    std::make_pair(record.second.lock(), std::make_pair(record.first, neighbor_vector)));
                 neighbor_vector->out.erase(temporary);
                 record.second.lock()->in.erase(neighbor_vector->global_offset);
             }
@@ -401,8 +400,8 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Cluster> &ne
         {
             for (const auto &edge : deleted_edges)
             {
-                edge.first->out.insert(edge.second);
-                edge.second.second->in.insert(std::make_pair(edge.first->global_offset, edge.first));
+                edge.second.second->out.insert(std::make_pair(edge.second.first, edge.first));
+                edge.first->in.insert(std::make_pair(edge.second.second->global_offset, edge.second.second));
             }
         }
         // 如果新向量应该被插入上一层中

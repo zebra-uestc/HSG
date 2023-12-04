@@ -88,7 +88,7 @@ int main(int argc, char **argv)
     auto neighbors = load_neighbors(argv[3]);
     uint64_t max_connect = 10;
     uint64_t relaxed_monotonicity = 5;
-    uint64_t step = 2;
+    uint64_t step = 3;
     uint64_t query_relaxed_monotonicity = 30;
     if (argc > 4)
     {
