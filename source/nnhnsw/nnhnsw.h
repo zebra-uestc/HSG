@@ -135,8 +135,9 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
+                //                          begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -154,7 +155,7 @@ namespace
 bool connected(const std::shared_ptr<Vector_In_Index> &start,
                std::unordered_map<std::shared_ptr<Vector_In_Index>, std::pair<float, std::shared_ptr<Vector_In_Index>>>
                    &deleted_edges,
-               const std::shared_ptr<Layer> &layer)
+               const std::shared_ptr<Layer> &layer, const uint64_t step)
 {
     // 上一轮中被遍历到向量
     auto last = std::unordered_set<std::shared_ptr<Vector_In_Index>>();
@@ -164,7 +165,7 @@ bool connected(const std::shared_ptr<Vector_In_Index> &start,
     auto flag = std::unordered_set<uint64_t>();
     flag.insert(start->global_offset);
     last.insert(start);
-    while (!last.empty())
+    for (auto round = 0; round < step; ++round)
     {
         // 遍历上一轮中被遍历到的向量的所有邻居向量
         for (const auto &vector : last)
@@ -409,7 +410,7 @@ void insert(Index<Dimension_Type> &index, std::shared_ptr<Vector_In_Index> &new_
             }
             ++neighbor_iterator;
         }
-        if (!connected(new_vector, deleted_edges, index.layers[target_layer]))
+        if (!connected(new_vector, deleted_edges, index.layers[target_layer], index.step))
         {
             for (const auto &edge : deleted_edges)
             {
