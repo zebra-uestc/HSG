@@ -85,14 +85,12 @@ template <typename Dimension_Type> class Index
     uint64_t relaxed_monotonicity{};
     uint64_t step{};
 
-    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type,
-                   const uint64_t minimum_connect_number = 10, const uint64_t relaxed_monotonicity = 10,
-                   uint64_t step = 3)
+    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type)
     {
-        this->minimum_connect_number = minimum_connect_number;
+        this->minimum_connect_number = 5;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
-        this->relaxed_monotonicity = relaxed_monotonicity;
-        this->step = step;
+        this->relaxed_monotonicity = 5;
+        this->step = 3;
         // 判断原始向量数据是否为空
         if (!vectors.empty() && !vectors.begin()->empty())
         {
@@ -128,9 +126,8 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
-                //                          begin).count() << std::endl;
+                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -461,6 +458,60 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     {
         throw std::invalid_argument("The dimension of insert vector is not "
                                     "equality with vectors in index. ");
+    }
+    auto temporary = std::to_string(inserted_vector_global_offset);
+    switch (temporary.length())
+    {
+    case 5:
+        index.minimum_connect_number = 10;
+        index.relaxed_monotonicity = 10;
+        break;
+    case 6:
+        index.minimum_connect_number = 20;
+        index.relaxed_monotonicity = 20;
+        break;
+    case 7:
+        index.minimum_connect_number = 30;
+        index.relaxed_monotonicity = 30;
+        break;
+    case 8:
+        index.minimum_connect_number = 40;
+        index.relaxed_monotonicity = 40;
+        break;
+    case 9:
+        index.minimum_connect_number = 50;
+        index.relaxed_monotonicity = 50;
+        break;
+    case 10:
+        index.minimum_connect_number = 60;
+        index.relaxed_monotonicity = 60;
+        break;
+    }
+    if (5 < temporary.size())
+    {
+        switch (temporary[1])
+        {
+        case '0':
+        case '1':
+            index.step = 6;
+            break;
+        case '2':
+        case '3':
+            index.step = 5;
+            break;
+        case '4':
+        case '5':
+            index.step = 4;
+            break;
+        case '6':
+        case '7':
+            index.step = 3;
+            break;
+        case '8':
+        case '9':
+            index.step = 2;
+            break;
+        }
     }
     index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
     insert(index, inserted_vector_global_offset, 0);
