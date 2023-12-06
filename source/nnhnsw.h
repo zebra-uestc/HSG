@@ -75,13 +75,12 @@ template <typename Dimension_Type> class Index
     uint64_t relaxed_monotonicity{};
     uint64_t step{};
 
-    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type,
-                   const uint64_t max_connect = 10, const uint64_t relaxed_monotonicity = 10, uint64_t step = 3)
+    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type)
     {
-        this->max_connect = max_connect;
+        this->max_connect = 5;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
-        this->relaxed_monotonicity = relaxed_monotonicity;
-        this->step = step;
+        this->relaxed_monotonicity = 5;
+        this->step = 3;
         // 判断原始向量数据是否为空
         if (!vectors.empty() && !vectors.begin()->empty())
         {
@@ -117,9 +116,8 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
-                //                          begin).count() << std::endl;
+                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -146,7 +144,7 @@ bool connected(const Index<Dimension_Type> &index, const uint64_t layer_number, 
     auto flag = std::unordered_set<uint64_t>();
     flag.insert(start);
     last.insert(start);
-    for (auto round = 0; round < index.step * 2; ++round)
+    for (auto round = 0; round < 7; ++round)
     {
         // 遍历上一轮中被遍历到的向量的所有邻居向量
         for (const auto &vector_global_offset : last)
@@ -460,6 +458,60 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     {
         throw std::invalid_argument("The dimension of insert vector is not "
                                     "equality with vectors in index. ");
+    }
+    auto temporary = std::to_string(inserted_vector_global_offset);
+    switch (temporary.length())
+    {
+    case 5:
+        index.max_connect = 10;
+        index.relaxed_monotonicity = 10;
+        break;
+    case 6:
+        index.max_connect = 20;
+        index.relaxed_monotonicity = 20;
+        break;
+    case 7:
+        index.max_connect = 30;
+        index.relaxed_monotonicity = 30;
+        break;
+    case 8:
+        index.max_connect = 40;
+        index.relaxed_monotonicity = 40;
+        break;
+    case 9:
+        index.max_connect = 50;
+        index.relaxed_monotonicity = 50;
+        break;
+    case 10:
+        index.max_connect = 60;
+        index.relaxed_monotonicity = 60;
+        break;
+    }
+    if (5 < temporary.size())
+    {
+        switch (temporary[1])
+        {
+        case '0':
+        case '1':
+            index.step = 6;
+            break;
+        case '2':
+        case '3':
+            index.step = 5;
+            break;
+        case '4':
+        case '5':
+            index.step = 4;
+            break;
+        case '6':
+        case '7':
+            index.step = 3;
+            break;
+        case '8':
+        case '9':
+            index.step = 2;
+            break;
+        }
     }
     auto temporary_vector =
         std::make_unique<Vector_In_Index<Dimension_Type>>(inserted_vector_global_offset, inserted_vector);
