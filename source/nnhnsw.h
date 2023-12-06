@@ -128,8 +128,9 @@ template <typename Dimension_Type> class Index
                 auto begin = std::chrono::high_resolution_clock::now();
                 insert(*this, vectors[global_offset]);
                 auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+                //                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                //                          << std::chrono::duration_cast<std::chrono::microseconds>(end -
+                //                          begin).count() << std::endl;
                 total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
             std::cout << "building index consts(us): " << total_time << std::endl;
@@ -245,10 +246,7 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
     {
         // 标记簇中的向量是否被遍历过
         std::unordered_set<uint64_t> flags;
-        // 如果最近遍历的向量的距离的中位数大于优先队列的最大值，提前结束
-        std::set<float> sorted_recent_distance;
-        // 最近便利的向量的距离
-        std::queue<float> recent_distance;
+        uint64_t out_of_bound = 0;
         // 排队队列
         auto waiting_vectors = std::map<float, uint64_t>();
         waiting_vectors.insert(
@@ -269,29 +267,17 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
                 // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
                 if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
                 {
-                    auto temporary_recent_distance = std::queue<float>();
-                    std::swap(recent_distance, temporary_recent_distance);
-                    //                    auto temporary_sorted_recent_distance = std::set<float>();
-                    //                    std::swap(sorted_recent_distance, temporary_sorted_recent_distance);
-                    sorted_recent_distance.clear();
+                    out_of_bound = 0;
                     nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector_global_offset));
                     nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
                 }
+                else if (relaxed_monotonicity < out_of_bound)
+                {
+                    break;
+                }
                 else
                 {
-                    recent_distance.push(processing_distance);
-                    sorted_recent_distance.insert(processing_distance);
-                    // 如果优先队列中的最大值小于最近浏览的向量的距离的中值
-                    // 结束遍历
-                    if (relaxed_monotonicity < recent_distance.size())
-                    {
-                        sorted_recent_distance.erase(recent_distance.front());
-                        recent_distance.pop();
-                        if (std::prev(nearest_neighbors.end())->first < *(sorted_recent_distance.begin()))
-                        {
-                            break;
-                        }
-                    }
+                    ++out_of_bound;
                 }
             }
             // 计算当前向量的出边指向的向量和目标向量的距离
@@ -442,11 +428,12 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
         {
             // 记录被插入向量每一层中距离最近的top_k个邻居向量
             result = nearest_neighbors(index, index.layers.size() - 1, query_vector,
-                                       index.layers.back()->vectors.begin()->first, 1, 5);
+                                       index.layers.back()->vectors.begin()->first, 1, index.relaxed_monotonicity);
             // 逐层扫描
             for (uint64_t i = index.layers.size() - 2; 0 < i; --i)
             {
-                result = nearest_neighbors(index, i, query_vector, result.begin()->second, 1, 5);
+                result =
+                    nearest_neighbors(index, i, query_vector, result.begin()->second, 1, index.relaxed_monotonicity);
             }
             result = nearest_neighbors(index, 0, query_vector, result.begin()->second, top_k, relaxed_monotonicity);
         }
