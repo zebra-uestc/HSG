@@ -250,14 +250,11 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
                                             const std::vector<Dimension_Type> &query_vector, const uint64_t start,
                                             const uint64_t top_k, const uint64_t relaxed_monotonicity)
 {
+    uint64_t out_of_bound = 0;
     // 优先队列
     auto nearest_neighbors = std::map<float, uint64_t>();
     // 标记向量是否被遍历过
     std::unordered_set<uint64_t> flags;
-    // 如果最近遍历的向量的距离的最小值大于优先队列的最大值，提前结束
-    std::set<float> sorted_recent_distance;
-    // 最近便利的向量的距离
-    std::queue<float> recent_distance;
     // 排队队列
     auto waiting_vectors = std::map<float, uint64_t>();
     waiting_vectors.insert(std::make_pair(index.distance_calculation(query_vector, index.vectors[start]->data), start));
@@ -277,27 +274,17 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
             // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
             if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
             {
-                auto temporary_recent_distance = std::queue<float>();
-                std::swap(recent_distance, temporary_recent_distance);
-                sorted_recent_distance.clear();
+                out_of_bound = 0;
                 nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
                 nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
             }
+            else if (relaxed_monotonicity < out_of_bound)
+            {
+                break;
+            }
             else
             {
-                recent_distance.push(processing_distance);
-                sorted_recent_distance.insert(processing_distance);
-                // 如果优先队列中的最大值小于最近浏览的向量的距离的中值
-                // 结束遍历
-                if (relaxed_monotonicity < recent_distance.size())
-                {
-                    sorted_recent_distance.erase(recent_distance.front());
-                    recent_distance.pop();
-                    if (std::prev(nearest_neighbors.end())->first < *(sorted_recent_distance.begin()))
-                    {
-                        break;
-                    }
-                }
+                ++out_of_bound;
             }
         }
         // 计算当前向量的出边指向的向量和目标向量的距离
