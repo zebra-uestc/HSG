@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "bruteforce.h"
-#include "nnhnsw.h"
+#include "ehnsw.h"
 
 uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
 {
@@ -86,19 +86,34 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 100;
+    uint64_t query_relaxed_monotonicity = 200;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2);
-    uint64_t total_hit = 0;
+    ehnsw::Index<float> index(Distance_Type::Euclidean2);
     uint64_t total_time = 0;
+    for (auto i = 0; i < train.size(); ++i)
+    {
+        auto begin = std::chrono::high_resolution_clock::now();
+        ehnsw::insert(index, train[i]);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "inserted ths " << i << "th vector, costs(us): "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+    }
+    std::cout << "building index consts(us): " << total_time << std::endl;
+    for (auto i = 0; i < index.layers.size(); ++i)
+    {
+        std::cout << "layers[" << i << "]: " << index.layers[i]->vectors.size() << " vectors. " << std::endl;
+    }
+    uint64_t total_hit = 0;
+    total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = nnhnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = ehnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "one query costs(us): "
                   << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;

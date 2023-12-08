@@ -18,7 +18,7 @@
 
 #include "distance.h"
 
-namespace nnhnsw
+namespace ehnsw
 {
 
 // 向量
@@ -85,57 +85,12 @@ template <typename Dimension_Type> class Index
     uint64_t relaxed_monotonicity{};
     uint64_t step{};
 
-    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type)
+    explicit Index(const Distance_Type distance_type)
     {
         this->minimum_connect_number = 5;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
-        this->relaxed_monotonicity = 5;
+        this->relaxed_monotonicity = 100;
         this->step = 3;
-        // 判断原始向量数据是否为空
-        if (!vectors.empty() && !vectors.begin()->empty())
-        {
-            // debug
-            //            {
-            //                uint64_t pause = 17;
-            //                for (auto i = 0; i < pause; ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    auto begin = std::chrono::high_resolution_clock::now();
-            //                    insert(*this, vectors[i]);
-            //                    auto end = std::chrono::high_resolution_clock::now();
-            //                    std::cout << "inserting one vector costs(us): "
-            //                              << std::chrono::duration_cast<std::chrono::microseconds>(end -
-            //                              begin).count()
-            //                              << std::endl;
-            //                }
-            //                std::cout << "inserting " << pause << std::endl;
-            //                insert(*this, vectors[pause]);
-            //                std::cout << "insert done " << std::endl;
-            //                for (auto i = pause; i < vectors.size(); ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    insert(*this, vectors[i]);
-            //                    std::cout << "insert done " << std::endl;
-            //                }
-            //            }
-            // debug
-
-            uint64_t total_time = 0;
-            for (auto global_offset = 0; global_offset < vectors.size(); ++global_offset)
-            {
-                auto begin = std::chrono::high_resolution_clock::now();
-                insert(*this, vectors[global_offset]);
-                auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
-                total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            }
-            std::cout << "building index consts(us): " << total_time << std::endl;
-            for (auto i = 0; i < this->layers.size(); ++i)
-            {
-                std::cout << "layers[" << i << "]: " << this->layers[i]->vectors.size() << " vectors. " << std::endl;
-            }
-        }
     }
 };
 
@@ -150,7 +105,7 @@ bool connected(const std::unique_ptr<Layer> &layer, const uint64_t start,
     auto flag = std::unordered_set<uint64_t>();
     flag.insert(start);
     last.insert(start);
-    for (auto round = 0; round < step * 2; ++round)
+    for (auto round = 0; round < 4; ++round)
     {
         for (const auto &vector_global_offset : last)
         {
@@ -303,7 +258,7 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
 }
 
 template <typename Dimension_Type>
-void insert(Index<Dimension_Type> &index, const uint64_t new_vector_global_offset, uint64_t target_layer_number)
+void add(Index<Dimension_Type> &index, const uint64_t new_vector_global_offset, uint64_t target_layer_number)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
@@ -463,28 +418,28 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     switch (temporary.length())
     {
     case 5:
-        index.minimum_connect_number = 10;
-        index.relaxed_monotonicity = 10;
+        index.minimum_connect_number = 6;
+        //        index.relaxed_monotonicity = 5;
         break;
     case 6:
-        index.minimum_connect_number = 20;
-        index.relaxed_monotonicity = 20;
+        index.minimum_connect_number = 7;
+        //        index.relaxed_monotonicity = 20;
         break;
     case 7:
-        index.minimum_connect_number = 30;
-        index.relaxed_monotonicity = 30;
+        index.minimum_connect_number = 8;
+        //        index.relaxed_monotonicity = 30;
         break;
     case 8:
-        index.minimum_connect_number = 40;
-        index.relaxed_monotonicity = 40;
+        index.minimum_connect_number = 9;
+        //        index.relaxed_monotonicity = 40;
         break;
     case 9:
-        index.minimum_connect_number = 50;
-        index.relaxed_monotonicity = 50;
+        index.minimum_connect_number = 10;
+        //        index.relaxed_monotonicity = 50;
         break;
     case 10:
-        index.minimum_connect_number = 60;
-        index.relaxed_monotonicity = 60;
+        index.minimum_connect_number = 11;
+        //        index.relaxed_monotonicity = 60;
         break;
     }
     if (5 < temporary.size())
@@ -514,7 +469,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
         }
     }
     index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-    insert(index, inserted_vector_global_offset, 0);
+    add(index, inserted_vector_global_offset, 0);
 }
 
-} // namespace nnhnsw
+} // namespace ehnsw
