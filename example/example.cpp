@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "bruteforce.h"
-#include "nnhnsw.h"
+#include "ccvi.h"
 
 uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
 {
@@ -92,13 +92,28 @@ int main(int argc, char **argv)
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    nnhnsw::Index<float> index(train, Distance_Type::Euclidean2);
-    uint64_t total_hit = 0;
+    ccvi::Index<float> index(Distance_Type::Euclidean2);
     uint64_t total_time = 0;
+    for (auto global_offset = 0; global_offset < train.size(); ++global_offset)
+    {
+        auto begin = std::chrono::high_resolution_clock::now();
+        ccvi::insert(index, train[global_offset]);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "inserting ths " << global_offset << "th vector costs(us): "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+    }
+    std::cout << "building index consts(us): " << total_time << std::endl;
+    for (auto i = 0; i < index.layers.size(); ++i)
+    {
+        std::cout << "layers[" << i << "]: " << index.layers[i]->vectors.size() << " vectors. " << std::endl;
+    }
+    uint64_t total_hit = 0;
+    total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = nnhnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = ccvi::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "one query costs(us): "
                   << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;

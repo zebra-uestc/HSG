@@ -18,7 +18,7 @@
 
 #include "distance.h"
 
-namespace nnhnsw
+namespace ccvi
 {
 
 // 索引中的向量
@@ -75,57 +75,12 @@ template <typename Dimension_Type> class Index
     uint64_t relaxed_monotonicity{};
     uint64_t step{};
 
-    explicit Index(const std::vector<std::vector<Dimension_Type>> &vectors, const Distance_Type distance_type)
+    explicit Index(const Distance_Type distance_type)
     {
         this->max_connect = 5;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
-        this->relaxed_monotonicity = 5;
+        this->relaxed_monotonicity = 100;
         this->step = 3;
-        // 判断原始向量数据是否为空
-        if (!vectors.empty() && !vectors.begin()->empty())
-        {
-            // debug
-            //            {
-            //                uint64_t pause = 10736;
-            //                for (auto i = 0; i < pause; ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    auto begin = std::chrono::high_resolution_clock::now();
-            //                    insert(*this, vectors[i]);
-            //                    auto end = std::chrono::high_resolution_clock::now();
-            //                    std::cout << "inserting one vector costs(us): "
-            //                              << std::chrono::duration_cast<std::chrono::microseconds>(end -
-            //                              begin).count()
-            //                              << std::endl;
-            //                }
-            //                std::cout << "inserting " << pause << std::endl;
-            //                insert(*this, vectors[pause]);
-            //                std::cout << "insert done " << std::endl;
-            //                for (auto i = pause; i < vectors.size(); ++i)
-            //                {
-            //                    std::cout << "inserting " << i << std::endl;
-            //                    insert(*this, vectors[i]);
-            //                    std::cout << "insert done " << std::endl;
-            //                }
-            //            }
-            // debug
-
-            uint64_t total_time = 0;
-            for (auto global_offset = 0; global_offset < vectors.size(); ++global_offset)
-            {
-                auto begin = std::chrono::high_resolution_clock::now();
-                insert(*this, vectors[global_offset]);
-                auto end = std::chrono::high_resolution_clock::now();
-                std::cout << "inserting ths " << global_offset << "th vector costs(us): "
-                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
-                total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            }
-            std::cout << "building index consts(us): " << total_time << std::endl;
-            for (auto i = 0; i < this->layers.size(); ++i)
-            {
-                std::cout << "layers[" << i << "]: " << this->layers[i]->vectors.size() << " vectors. " << std::endl;
-            }
-        }
     }
 };
 
@@ -314,7 +269,7 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
     return nearest_neighbors;
 }
 
-template <typename Dimension_Type> void insert(Index<Dimension_Type> &index, const uint64_t new_vector_global_offset)
+template <typename Dimension_Type> void add(Index<Dimension_Type> &index, const uint64_t new_vector_global_offset)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
@@ -518,7 +473,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     temporary_vector->out.emplace_back();
     temporary_vector->in.emplace_back();
     index.vectors.push_back(std::move(temporary_vector));
-    insert(index, inserted_vector_global_offset);
+    add(index, inserted_vector_global_offset);
 }
 
-} // namespace nnhnsw
+} // namespace ccvi

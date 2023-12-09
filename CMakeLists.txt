@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(
-        vector-index
+        cable-car-vector-index
         VERSION 1.0.0.0
         DESCRIPTION "This project is used to test vector index algorithm. "
         LANGUAGES CXX
@@ -30,5 +30,8 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     message(STATUS "Logical cores: ${LOGICAL_CORES}")
 
     add_subdirectory(example)
+
+    find_package(pybind11 REQUIRED)
+    pybind11_add_module(ccvipy python_binding/python_binding.cpp)
 
 endif ()
