@@ -5,3 +5,7 @@ target_link_libraries(nnhnsw_example PRIVATE nnhnsw)
 add_executable(ccvi_example ccvi_example.cpp)
 target_include_directories(ccvi_example PRIVATE .)
 target_link_libraries(ccvi_example PRIVATE ccvi)
+
+add_executable(ehnsw_example ehnsw_example.cpp)
+target_include_directories(ehnsw_example PRIVATE .)
+target_link_libraries(ehnsw_example PRIVATE ehnsw)
