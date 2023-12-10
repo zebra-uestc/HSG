@@ -31,4 +31,7 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_subdirectory(example)
 
+    find_package(pybind11 REQUIRED)
+    pybind11_add_module(ccvipy python_binding/ccvipy.cpp)
+
 endif ()
