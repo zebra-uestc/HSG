@@ -87,7 +87,7 @@ template <typename Dimension_Type> class Index
 
     explicit Index(const Distance_Type distance_type)
     {
-        this->minimum_connect_number = 5;
+        this->minimum_connect_number = 10;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
         this->relaxed_monotonicity = 100;
         this->step = 3;

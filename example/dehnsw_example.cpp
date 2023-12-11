@@ -86,7 +86,7 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 100;
+    uint64_t query_relaxed_monotonicity = 50;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
