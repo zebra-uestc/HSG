@@ -26,49 +26,40 @@ namespace dehnsw
 template <typename Dimension_Type> class Vector
 {
   public:
+    // 向量的原始数据
     std::vector<Dimension_Type> data;
-
-    explicit Vector(const std::vector<Dimension_Type> &data)
-    {
-        this->data = data;
-    }
-};
-
-// 每层中的向量
-class Vector_In_Index
-{
-  public:
-    // 向量在原始数据的偏移量
-    uint64_t global_offset;
+    // 向量在整个数据集中的偏移量
+    uint64_t global_offset{};
     // 指向的邻居向量
     std::map<float, uint64_t> out;
     // 指向该向量的邻居向量
     std::unordered_set<uint64_t> in;
 
-    explicit Vector_In_Index(const uint64_t global_offset)
+    explicit Vector(const uint64_t global_offset, const std::vector<Dimension_Type> &data)
     {
         this->global_offset = global_offset;
+        this->data = data;
     }
 };
 
 // 索引中的一层
-class Layer
+template <typename Dimension_Type> class Layer
 {
   public:
-    // 簇中的向量
-    std::unordered_map<uint64_t, std::unique_ptr<Vector_In_Index>> vectors;
-    // 该簇中被选出的向量在原始数据的偏移量
+    // 层中的向量
+    std::unordered_map<uint64_t, std::unique_ptr<Vector<Dimension_Type>>> vectors;
+    // 该层中被选出的向量在子索引中的偏移量
     std::unordered_set<uint64_t> selected_vectors;
 
     explicit Layer() = default;
 };
 
 // 索引
-class Sub_Index
+template <typename Dimension_Type> class Sub_Index
 {
   public:
     // 自底向上存放每一层
-    std::vector<std::unique_ptr<Layer>> layers;
+    std::vector<std::unique_ptr<Layer<Dimension_Type>>> layers;
 
     explicit Sub_Index() = default;
 };
@@ -77,10 +68,9 @@ class Sub_Index
 template <typename Dimension_Type> class Index
 {
   public:
-    // 向量原始数据
-    std::vector<Vector<Dimension_Type>> vectors;
+    uint64_t count{};
     // 子索引
-    std::vector<std::unique_ptr<Sub_Index>> sub_indexes;
+    std::vector<std::unique_ptr<Sub_Index<Dimension_Type>>> sub_indexes;
     // 每个向量的最大邻居向量个数
     uint64_t minimum_connect_number{};
     // 插入向量时候选邻居向量系数
@@ -93,6 +83,7 @@ template <typename Dimension_Type> class Index
 
     explicit Index(const Distance_Type distance_type)
     {
+        this->count = 0;
         this->minimum_connect_number = 10;
         this->relaxed_monotonicity = 100;
         this->step = 3;
@@ -103,7 +94,8 @@ template <typename Dimension_Type> class Index
 namespace
 {
 
-bool connected(const Layer &layer, const uint64_t start,
+template <typename Dimension_Type>
+bool connected(const Layer<Dimension_Type> &layer, const uint64_t start,
                std::unordered_map<uint64_t, std::pair<float, uint64_t>> &deleted_edges)
 {
     auto last = std::unordered_set<uint64_t>();
@@ -143,7 +135,8 @@ bool connected(const Layer &layer, const uint64_t start,
     return false;
 }
 
-bool insert_to_upper_layer(const Layer &layer, const uint64_t vector_global_offset, const uint64_t step)
+template <typename Dimension_Type>
+bool insert_to_upper_layer(const Layer<Dimension_Type> &layer, const uint64_t vector_global_offset, const uint64_t step)
 {
     auto last = std::unordered_set<uint64_t>();
     auto next = std::unordered_set<uint64_t>();
@@ -185,7 +178,8 @@ bool insert_to_upper_layer(const Layer &layer, const uint64_t vector_global_offs
 
 // 从开始向量查询开始向量所在簇中距离最近的top-k个向量
 template <typename Dimension_Type>
-std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &index, const Sub_Index &sub_index,
+std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &index,
+                                                   const Sub_Index<Dimension_Type> &sub_index,
                                                    const uint64_t layer_number,
                                                    const std::vector<Dimension_Type> &query_vector,
                                                    const uint64_t start)
@@ -196,8 +190,8 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
     {
         for (auto &vector : sub_index.layers[layer_number]->vectors)
         {
-            nearest_neighbors.insert(std::make_pair(
-                index.distance_calculation(query_vector, index.vectors[vector.first].data), vector.first));
+            nearest_neighbors.insert(
+                std::make_pair(index.distance_calculation(query_vector, vector.second->data), vector.first));
         }
     }
     else
@@ -207,8 +201,9 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
         uint64_t out_of_bound = 0;
         // 排队队列
         auto waiting_vectors = std::map<float, uint64_t>();
-        waiting_vectors.insert(
-            std::make_pair(index.distance_calculation(query_vector, index.vectors[start].data), start));
+        waiting_vectors.insert(std::make_pair(
+            index.distance_calculation(query_vector, sub_index.layers[layer_number]->vectors.find(start)->second->data),
+            start));
         while (!waiting_vectors.empty())
         {
             auto processing_distance = waiting_vectors.begin()->first;
@@ -245,7 +240,9 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
                 if (flags.insert(vector.second).second)
                 {
                     waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(query_vector, index.vectors[vector.second].data), vector.second));
+                        index.distance_calculation(
+                            query_vector, sub_index.layers[layer_number]->vectors.find(vector.second)->second->data),
+                        vector.second));
                 }
             }
             // 计算当前向量的入边指向的向量和目标向量的距离
@@ -255,7 +252,9 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
                 if (flags.insert(vector_global_offset).second)
                 {
                     waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(query_vector, index.vectors[vector_global_offset].data),
+                        index.distance_calculation(
+                            query_vector,
+                            sub_index.layers[layer_number]->vectors.find(vector_global_offset)->second->data),
                         vector_global_offset));
                 }
             }
@@ -266,7 +265,8 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
 
 // 从开始向量查询开始向量所在簇中距离最近的top-k个向量
 template <typename Dimension_Type>
-std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index, const Sub_Index &sub_index,
+std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index,
+                                                  const Sub_Index<Dimension_Type> &sub_index,
                                                   const uint64_t layer_number,
                                                   const std::vector<Dimension_Type> &query_vector, const uint64_t start,
                                                   const uint64_t top_k, const uint64_t relaxed_monotonicity,
@@ -278,8 +278,8 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
     {
         for (auto &vector : sub_index.layers[layer_number]->vectors)
         {
-            nearest_neighbors.insert(std::make_pair(
-                index.distance_calculation(query_vector, index.vectors[vector.first].data), vector.first));
+            nearest_neighbors.insert(
+                std::make_pair(index.distance_calculation(query_vector, vector.second->data), vector.first));
         }
     }
     else
@@ -289,8 +289,9 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
         uint64_t out_of_bound = 0;
         // 排队队列
         auto waiting_vectors = std::map<float, uint64_t>();
-        waiting_vectors.insert(
-            std::make_pair(index.distance_calculation(query_vector, index.vectors[start].data), start));
+        waiting_vectors.insert(std::make_pair(
+            index.distance_calculation(query_vector, sub_index.layers[layer_number]->vectors.find(start)->second->data),
+            start));
         while (!waiting_vectors.empty())
         {
             auto processing_distance = waiting_vectors.begin()->first;
@@ -341,7 +342,9 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                 if (flags.insert(vector.second).second)
                 {
                     waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(query_vector, index.vectors[vector.second].data), vector.second));
+                        index.distance_calculation(
+                            query_vector, sub_index.layers[layer_number]->vectors.find(vector.second)->second->data),
+                        vector.second));
                 }
             }
             // 计算当前向量的入边指向的向量和目标向量的距离
@@ -351,7 +354,9 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                 if (flags.insert(vector_global_offset).second)
                 {
                     waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(query_vector, index.vectors[vector_global_offset].data),
+                        index.distance_calculation(
+                            query_vector,
+                            sub_index.layers[layer_number]->vectors.find(vector_global_offset)->second->data),
                         vector_global_offset));
                 }
             }
@@ -361,13 +366,12 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
 }
 
 template <typename Dimension_Type>
-void add(Index<Dimension_Type> &index, Sub_Index &sub_index, const uint64_t new_vector_global_offset,
-         uint64_t target_layer_number)
+void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, const uint64_t new_vector_global_offset,
+         const std::vector<Dimension_Type> &new_vector_data, uint64_t target_layer_number)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
-    every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, sub_index.layers.size() - 1,
-                                                        index.vectors[new_vector_global_offset].data,
+    every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, sub_index.layers.size() - 1, new_vector_data,
                                                         sub_index.layers.back()->vectors.begin()->first));
     // 逐层扫描
     // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
@@ -375,14 +379,13 @@ void add(Index<Dimension_Type> &index, Sub_Index &sub_index, const uint64_t new_
     // 直接通过上一层中返回的结果即可进行计算
     for (int64_t layer_number = sub_index.layers.size() - 2; 0 <= layer_number; --layer_number)
     {
-        every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, layer_number,
-                                                            index.vectors[new_vector_global_offset].data,
+        every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, layer_number, new_vector_data,
                                                             every_layer_neighbors.top().begin()->second));
     }
     // 插入向量
     while (!every_layer_neighbors.empty())
     {
-        auto temporary_new_vector = std::make_unique<Vector_In_Index>(new_vector_global_offset);
+        auto temporary_new_vector = std::make_unique<Vector<Dimension_Type>>(new_vector_global_offset, new_vector_data);
         sub_index.layers[target_layer_number]->vectors.insert(
             std::make_pair(new_vector_global_offset, std::move(temporary_new_vector)));
         const auto &new_vector = sub_index.layers[target_layer_number]->vectors.find(new_vector_global_offset)->second;
@@ -430,8 +433,8 @@ void add(Index<Dimension_Type> &index, Sub_Index &sub_index, const uint64_t new_
             ++target_layer_number;
             if (every_layer_neighbors.empty())
             {
-                sub_index.layers.push_back(std::make_unique<Layer>());
-                auto temporary = std::make_unique<Vector_In_Index>(new_vector_global_offset);
+                sub_index.layers.push_back(std::make_unique<Layer<Dimension_Type>>());
+                auto temporary = std::make_unique<Vector<Dimension_Type>>(new_vector_global_offset, new_vector_data);
                 sub_index.layers.back()->vectors.insert(std::make_pair(new_vector_global_offset, std::move(temporary)));
                 break;
             }
@@ -450,69 +453,59 @@ template <typename Dimension_Type>
 std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::vector<Dimension_Type> &query_vector,
                                 uint64_t top_k, uint64_t relaxed_monotonicity = 0)
 {
-    if (index.vectors.empty())
-    {
-        throw std::logic_error("Empty vectors in index. ");
-    }
-    if (query_vector.size() != index.vectors[0].data.size())
-    {
-        throw std::invalid_argument("The dimension of query vector is not "
-                                    "equality with vectors in index. ");
-    }
+    //    if (index.vectors.empty())
+    //    {
+    //        throw std::logic_error("Empty vectors in index. ");
+    //    }
+    //    if (query_vector.size() != index.vectors[0].data.size())
+    //    {
+    //        throw std::invalid_argument("The dimension of query vector is not "
+    //                                    "equality with vectors in index. ");
+    //    }
     if (relaxed_monotonicity == 0)
     {
         relaxed_monotonicity = top_k;
     }
     auto result = std::map<float, uint64_t>();
-    // 如果索引中的向量数量小于top-k
-    // 直接暴力搜索返回排序后的全部结果
-    if (index.vectors.size() < top_k)
+    float distance_bound = MAXFLOAT;
+    auto one_sub_index_result = std::map<float, uint64_t>();
+    for (const auto &sub_index : index.sub_indexes)
     {
-        for (uint64_t global_offset = 0; global_offset < index.vectors.size(); ++global_offset)
+        auto begin = std::chrono::high_resolution_clock::now();
+        if (sub_index->layers.size() == 1)
         {
-            result.insert(std::make_pair(index.distance_calculation(query_vector, index.vectors[global_offset].data),
-                                         global_offset));
+            auto temporary = nearest_neighbors_query(index, sub_index.operator*(), 0, query_vector,
+                                                     sub_index->layers[0]->vectors.begin()->first, top_k,
+                                                     relaxed_monotonicity, distance_bound);
+            one_sub_index_result.insert(temporary.begin(), temporary.end());
         }
-    }
-    else
-    {
-        float distance_bound = MAXFLOAT;
-        auto one_sub_index_result = std::map<float, uint64_t>();
-        for (const auto &sub_index : index.sub_indexes)
+        else
         {
-            if (sub_index->layers.size() == 1)
+            // 记录被插入向量每一层中距离最近的top_k个邻居向量
+            one_sub_index_result =
+                nearest_neighbors_query(index, sub_index.operator*(), sub_index->layers.size() - 1, query_vector,
+                                        sub_index->layers.back()->vectors.begin()->first, 1, 10, MAXFLOAT);
+            // 逐层扫描
+            for (uint64_t i = sub_index->layers.size() - 2; 0 < i; --i)
             {
-                auto temporary = nearest_neighbors_query(index, sub_index.operator*(), 0, query_vector,
-                                                         sub_index->layers[0]->vectors.begin()->first, top_k,
-                                                         relaxed_monotonicity, distance_bound);
-                one_sub_index_result.insert(temporary.begin(), temporary.end());
+                one_sub_index_result = nearest_neighbors_query(index, sub_index.operator*(), i, query_vector,
+                                                               one_sub_index_result.begin()->second, 1, 10, MAXFLOAT);
             }
-            else
-            {
-                // 记录被插入向量每一层中距离最近的top_k个邻居向量
-                one_sub_index_result = nearest_neighbors_query(
-                    index, sub_index.operator*(), sub_index->layers.size() - 1, query_vector,
-                    sub_index->layers.back()->vectors.begin()->first, 1, index.relaxed_monotonicity, MAXFLOAT);
-                // 逐层扫描
-                for (uint64_t i = sub_index->layers.size() - 2; 0 < i; --i)
-                {
-                    one_sub_index_result = nearest_neighbors_query(index, sub_index.operator*(), i, query_vector,
-                                                                   one_sub_index_result.begin()->second, 1,
-                                                                   index.relaxed_monotonicity, MAXFLOAT);
-                }
-                one_sub_index_result = nearest_neighbors_query(index, sub_index.operator*(), 0, query_vector,
-                                                               one_sub_index_result.begin()->second, top_k,
-                                                               relaxed_monotonicity, distance_bound);
-            }
-            result.insert(one_sub_index_result.begin(), one_sub_index_result.end());
-            if (top_k < result.size())
-            {
-                auto temporary = result.begin();
-                std::advance(temporary, top_k);
-                result.erase(temporary, result.end());
-            }
-            distance_bound = std::prev(result.end())->first;
+            one_sub_index_result = nearest_neighbors_query(index, sub_index.operator*(), 0, query_vector,
+                                                           one_sub_index_result.begin()->second, top_k,
+                                                           relaxed_monotonicity, distance_bound);
         }
+        result.insert(one_sub_index_result.begin(), one_sub_index_result.end());
+        if (top_k < result.size())
+        {
+            auto temporary = result.begin();
+            std::advance(temporary, top_k);
+            result.erase(temporary, result.end());
+        }
+        distance_bound = std::prev(result.end())->first;
+        auto end = std::chrono::high_resolution_clock::now();
+        std::cout << "one sub-index costs(us): "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
     }
     return result;
 }
@@ -522,36 +515,34 @@ template <typename Dimension_Type>
 void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &inserted_vector)
 {
     // 插入向量在原始数据中的偏移量
-    uint64_t inserted_vector_global_offset = index.vectors.size();
+    uint64_t inserted_vector_global_offset = index.count;
+    ++index.count;
     // 如果是空的索引
     if (inserted_vector_global_offset == 0)
     {
-        index.sub_indexes.push_back(std::make_unique<Sub_Index>());
-        index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-        index.sub_indexes.back()->layers.push_back(std::make_unique<Layer>());
-        auto new_vector = std::make_unique<Vector_In_Index>(inserted_vector_global_offset);
+        index.sub_indexes.push_back(std::make_unique<Sub_Index<Dimension_Type>>());
+        index.sub_indexes.back()->layers.push_back(std::make_unique<Layer<Dimension_Type>>());
+        auto new_vector = std::make_unique<Vector<Dimension_Type>>(inserted_vector_global_offset, inserted_vector);
         index.sub_indexes.back()->layers.back()->vectors.insert(
             std::make_pair(inserted_vector_global_offset, std::move(new_vector)));
         return;
     }
     // 如果插入向量的维度不等于索引里向量的维度
-    if (inserted_vector.size() != index.vectors[0].data.size())
+    //    if (inserted_vector.size() != index.vectors[0].data.size())
+    //    {
+    //        throw std::invalid_argument("The dimension of insert vector is not "
+    //                                    "equality with vectors in index. ");
+    //    }
+    if (inserted_vector_global_offset % 100000 == 0)
     {
-        throw std::invalid_argument("The dimension of insert vector is not "
-                                    "equality with vectors in index. ");
-    }
-    if (inserted_vector_global_offset % 10000 == 0)
-    {
-        index.sub_indexes.push_back(std::make_unique<Sub_Index>());
-        index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-        index.sub_indexes.back()->layers.push_back(std::make_unique<Layer>());
-        auto new_vector = std::make_unique<Vector_In_Index>(inserted_vector_global_offset);
+        index.sub_indexes.push_back(std::make_unique<Sub_Index<Dimension_Type>>());
+        index.sub_indexes.back()->layers.push_back(std::make_unique<Layer<Dimension_Type>>());
+        auto new_vector = std::make_unique<Vector<Dimension_Type>>(inserted_vector_global_offset, inserted_vector);
         index.sub_indexes.back()->layers.back()->vectors.insert(
             std::make_pair(inserted_vector_global_offset, std::move(new_vector)));
         return;
     }
-    index.vectors.push_back(Vector<Dimension_Type>(inserted_vector));
-    add(index, index.sub_indexes.back().operator*(), inserted_vector_global_offset, 0);
+    add(index, index.sub_indexes.back().operator*(), inserted_vector_global_offset, inserted_vector, 0);
 }
 
 } // namespace dehnsw
