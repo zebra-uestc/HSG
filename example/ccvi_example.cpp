@@ -4,7 +4,6 @@
 #include <map>
 #include <vector>
 
-#include "bruteforce.h"
 #include "ccvi.h"
 
 uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
