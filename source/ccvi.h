@@ -54,11 +54,11 @@ template <typename Dimension_Type> class Index
     uint64_t count{};
     // 每个向量的邻居个数
     uint64_t minimum_connect_number{};
-    // 插入向量时候选邻居向量系数
+    // 插入向量时提前终止条件
     uint64_t relaxed_monotonicity{};
     // 步长
     uint64_t step{};
-    // 索引的最大层数
+    // 索引的层数
     uint64_t layer_count{};
     // 最高层中的向量的全局偏移量
     uint64_t vector_in_highest_layer{};
@@ -262,7 +262,7 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
     return nearest_neighbors;
 }
 
-template <typename Dimension_Type> void add(Index<Dimension_Type> &index, Vector<Dimension_Type> new_vector)
+template <typename Dimension_Type> void add(Index<Dimension_Type> &index, Vector<Dimension_Type> &new_vector)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
@@ -295,8 +295,9 @@ template <typename Dimension_Type> void add(Index<Dimension_Type> &index, Vector
             // 在邻居向量中记录指向自己的新向量
             neighbor_vector.in[layer_number].insert(new_vector.global_offset);
             // 新向量和邻居向量的距离小于邻居向量已指向的10个向量的距离
-            if (neighbor_vector.out[layer_number].upper_bound(neighbor.first) !=
-                neighbor_vector.out[layer_number].end())
+            if (neighbor_vector.out[layer_number].size() < index.minimum_connect_number ||
+                neighbor_vector.out[layer_number].upper_bound(neighbor.first) !=
+                    neighbor_vector.out[layer_number].end())
             {
                 neighbor_vector.out[layer_number].insert(std::pair(neighbor.first, new_vector.global_offset));
                 new_vector.in[layer_number].insert(neighbor.second);
