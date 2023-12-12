@@ -26,10 +26,12 @@ namespace dehnsw
 template <typename Dimension_Type> class Vector
 {
   public:
-    // 向量的原始数据
-    std::vector<Dimension_Type> data;
+    // 向量的最大层数
+    uint64_t layer{};
     // 向量在整个数据集中的偏移量
     uint64_t global_offset{};
+    // 向量的原始数据
+    std::vector<Dimension_Type> data;
     // 指向的邻居向量
     std::vector<std::map<float, uint64_t>> out;
     // 指向该向量的邻居向量
@@ -37,6 +39,7 @@ template <typename Dimension_Type> class Vector
 
     explicit Vector(const uint64_t global_offset, const std::vector<Dimension_Type> &data)
     {
+        this->layer = 0;
         this->global_offset = global_offset;
         this->data = data;
         this->out.emplace_back();
@@ -48,12 +51,12 @@ template <typename Dimension_Type> class Vector
 template <typename Dimension_Type> class Sub_Index
 {
   public:
-    // 子索引中的向量
-    std::vector<Vector<Dimension_Type>> vectors;
     // 子索引最大层数
     uint64_t layer_count{};
-    // 该层中的向量
+    // 最高层中的向量的全局偏移量
     uint64_t vector_in_highest_layer{};
+    // 子索引中的向量
+    std::vector<Vector<Dimension_Type>> vectors;
 
     explicit Sub_Index(const uint64_t max_count_bound)
     {
@@ -109,10 +112,10 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
     last.insert(start);
     for (auto round = 0; round < 4; ++round)
     {
-        for (const auto &vector_global_offset : last)
+        for (const auto &last_vector_global_offset : last)
         {
             for (const auto &neighbor :
-                 sub_index.vectors[vector_global_offset & index.sub_index_bound].out[layer_number])
+                 sub_index.vectors[last_vector_global_offset & index.sub_index_bound].out[layer_number])
             {
                 deleted_edges.erase(neighbor.second);
                 if (flag.insert(neighbor.second).second)
@@ -121,7 +124,7 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
                 }
             }
             for (const auto &neighbor_global_offset :
-                 sub_index.vectors[vector_global_offset & index.sub_index_bound].in[layer_number])
+                 sub_index.vectors[last_vector_global_offset & index.sub_index_bound].in[layer_number])
             {
                 deleted_edges.erase(neighbor_global_offset);
                 if (flag.insert(neighbor_global_offset).second)
@@ -152,11 +155,12 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
     {
         for (const auto &last_vector_global_offset : last)
         {
-            for (auto &neighbor : sub_index.vectors[vector_global_offset & index.sub_index_bound].out[layer_number])
+            for (auto &neighbor :
+                 sub_index.vectors[last_vector_global_offset & index.sub_index_bound].out[layer_number])
             {
                 if (flag.insert(neighbor.second).second)
                 {
-                    if (layer_number < sub_index.vectors[neighbor.second].out.size())
+                    if (layer_number < sub_index.vectors[neighbor.second].layer)
                     {
                         return false;
                     }
@@ -164,11 +168,11 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
                 }
             }
             for (auto &neighbor_vector_global_offset :
-                 sub_index.vectors[vector_global_offset & index.sub_index_bound].in[layer_number])
+                 sub_index.vectors[last_vector_global_offset & index.sub_index_bound].in[layer_number])
             {
                 if (flag.insert(neighbor_vector_global_offset).second)
                 {
-                    if (layer_number < sub_index.vectors[neighbor_vector_global_offset].in.size())
+                    if (layer_number < sub_index.vectors[neighbor_vector_global_offset].layer)
                     {
                         return false;
                     }
@@ -389,7 +393,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
                 auto record = *temporary;
                 deleted_edges.insert(std::make_pair(record.second, std::make_pair(record.first, neighbor.second)));
                 neighbor_vector.out[target_layer_number].erase(temporary);
-                sub_index.vectors[record.second].in[target_layer_number].erase(neighbor.second);
+                sub_index.vectors[record.second & index.sub_index_bound].in[target_layer_number].erase(neighbor.second);
             }
         }
         if (!connected(index, sub_index, target_layer_number, new_vector.global_offset, deleted_edges))
@@ -412,6 +416,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
                 sub_index.layer_count = target_layer_number;
                 sub_index.vector_in_highest_layer = new_vector.global_offset;
             }
+            ++new_vector.layer;
             new_vector.out.emplace_back();
             new_vector.in.emplace_back();
         }
@@ -448,8 +453,9 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     for (const auto &sub_index : index.sub_indexes)
     {
         //        auto begin = std::chrono::high_resolution_clock::now();
-        one_sub_index_result.emplace(index.distance_calculation(query_vector, sub_index.vectors[0].data),
-                                     sub_index.vectors[0].global_offset);
+        one_sub_index_result.emplace(
+            index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
+            sub_index.vector_in_highest_layer);
         if (sub_index.layer_count != 0)
         {
             // 逐层扫描
