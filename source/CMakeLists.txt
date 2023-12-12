@@ -62,3 +62,16 @@ target_include_directories(dehnsw
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}
 )
+
+add_library(dccvi STATIC)
+set_target_properties(dccvi PROPERTIES LINKER_LANGUAGE CXX)
+target_sources(dccvi
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/dccvi.h
+        PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/distance.h
+)
+target_include_directories(dccvi
+        PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}
+)
