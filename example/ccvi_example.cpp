@@ -4,7 +4,6 @@
 #include <map>
 #include <vector>
 
-#include "bruteforce.h"
 #include "ccvi.h"
 
 uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
@@ -104,10 +103,6 @@ int main(int argc, char **argv)
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
     }
     std::cout << "building index consts(us): " << total_time << std::endl;
-    for (auto i = 0; i < index.layers.size(); ++i)
-    {
-        std::cout << "layers[" << i << "]: " << index.layers[i]->vectors.size() << " vectors. " << std::endl;
-    }
     uint64_t total_hit = 0;
     total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
