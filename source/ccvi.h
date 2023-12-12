@@ -22,7 +22,7 @@ namespace ccvi
 {
 
 // 索引中的向量
-template <typename Dimension_Type> class Vector_In_Index
+template <typename Dimension_Type> class Vector
 {
   public:
     // 向量的最大层数
@@ -36,7 +36,7 @@ template <typename Dimension_Type> class Vector_In_Index
     // 指向该向量的邻居向量
     std::vector<std::unordered_set<uint64_t>> in;
 
-    explicit Vector_In_Index(const uint64_t global_offset, const std::vector<Dimension_Type> &data)
+    explicit Vector(const uint64_t global_offset, const std::vector<Dimension_Type> &data)
     {
         this->layer = 0;
         this->global_offset = global_offset;
@@ -63,7 +63,7 @@ template <typename Dimension_Type> class Index
     // 最高层中的向量的全局偏移量
     uint64_t vector_in_highest_layer{};
     // 索引中的向量
-    std::vector<Vector_In_Index<Dimension_Type>> vectors;
+    std::vector<Vector<Dimension_Type>> vectors;
     // 距离计算
     float (*distance_calculation)(const std::vector<Dimension_Type> &vector1,
                                   const std::vector<Dimension_Type> &vector2);
@@ -262,7 +262,7 @@ std::map<float, uint64_t> nearest_neighbors(const Index<Dimension_Type> &index, 
     return nearest_neighbors;
 }
 
-template <typename Dimension_Type> void add(Index<Dimension_Type> &index, Vector_In_Index<Dimension_Type> new_vector)
+template <typename Dimension_Type> void add(Index<Dimension_Type> &index, Vector<Dimension_Type> new_vector)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
@@ -396,7 +396,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     // 如果是空的索引
     if (inserted_vector_global_offset == 0)
     {
-        index.vectors.push_back(Vector_In_Index<Dimension_Type>(inserted_vector_global_offset, inserted_vector));
+        index.vectors.push_back(Vector<Dimension_Type>(inserted_vector_global_offset, inserted_vector));
         return;
     }
     //    auto temporary = std::to_string(inserted_vector_global_offset);
@@ -453,7 +453,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     //            break;
     //        }
     //    }
-    index.vectors.push_back(Vector_In_Index<Dimension_Type>(inserted_vector_global_offset, inserted_vector));
+    index.vectors.push_back(Vector<Dimension_Type>(inserted_vector_global_offset, inserted_vector));
     add(index, index.vectors.back());
 }
 
