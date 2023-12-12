@@ -338,7 +338,7 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
         flags.insert(processing_vector);
         if (processing_distance < distance_bound)
         { // 如果已遍历的向量小于候选数量
-            if (nearest_neighbors.size() < index.parameters.minimum_connect_number)
+            if (nearest_neighbors.size() < top_k)
             {
                 nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
             }
@@ -351,7 +351,7 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                     nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
                     nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
                 }
-                else if (index.parameters.relaxed_monotonicity < out_of_bound)
+                else if (relaxed_monotonicity < out_of_bound)
                 {
                     break;
                 }
@@ -363,7 +363,7 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
         }
         else
         {
-            if (index.parameters.relaxed_monotonicity < out_of_bound)
+            if (relaxed_monotonicity < out_of_bound)
             {
                 break;
             }
