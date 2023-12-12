@@ -86,7 +86,7 @@ template <typename Dimension_Type> class Index
     float (*distance_calculation)(const std::vector<Dimension_Type> &vector1,
                                   const std::vector<Dimension_Type> &vector2);
 
-    explicit Index(const Distance_Type distance_type, const uint64_t sub_index_bound = 0xFFFF)
+    explicit Index(const Distance_Type distance_type, const uint64_t sub_index_bound = 0x1FFFF)
     {
         this->count = 0;
         this->sub_index_bound = sub_index_bound;
@@ -160,7 +160,7 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
             {
                 if (flag.insert(neighbor.second).second)
                 {
-                    if (layer_number < sub_index.vectors[neighbor.second].layer)
+                    if (layer_number < sub_index.vectors[neighbor.second & index.sub_index_bound].layer)
                     {
                         return false;
                     }
@@ -172,7 +172,7 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
             {
                 if (flag.insert(neighbor_vector_global_offset).second)
                 {
-                    if (layer_number < sub_index.vectors[neighbor_vector_global_offset].layer)
+                    if (layer_number < sub_index.vectors[neighbor_vector_global_offset & index.sub_index_bound].layer)
                     {
                         return false;
                     }
@@ -454,7 +454,8 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     {
         //        auto begin = std::chrono::high_resolution_clock::now();
         one_sub_index_result.emplace(
-            index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
+            index.distance_calculation(
+                query_vector, sub_index.vectors[sub_index.vector_in_highest_layer & index.sub_index_bound].data),
             sub_index.vector_in_highest_layer);
         if (sub_index.layer_count != 0)
         {
@@ -469,6 +470,7 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
                                         relaxed_monotonicity, distance_bound);
         }
         result.insert(one_sub_index_result.begin(), one_sub_index_result.end());
+        one_sub_index_result.clear();
         if (top_k < result.size())
         {
             auto temporary = result.begin();
