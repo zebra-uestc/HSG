@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cinttypes>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -13,6 +14,7 @@
 #include <stack>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -71,6 +73,8 @@ class Index_Parameters
   public:
     // 步长
     uint64_t step{};
+    // 向量的维度
+    uint64_t dimension{};
     // 每个子索引中向量的数量限制
     uint64_t sub_index_bound{};
     // 距离类型
@@ -80,9 +84,10 @@ class Index_Parameters
     // 每个向量的邻居个数
     uint64_t minimum_connect_number{};
 
-    explicit Index_Parameters(const uint64_t step, const uint64_t sub_index_bound, const Distance_Type distance_type,
-                              const uint64_t relaxed_monotonicity, const uint64_t minimum_connect_number)
-        : step(step), sub_index_bound(sub_index_bound), distance_type(distance_type),
+    explicit Index_Parameters(const uint64_t step, const uint64_t dimension, const uint64_t sub_index_bound,
+                              const Distance_Type distance_type, const uint64_t relaxed_monotonicity,
+                              const uint64_t minimum_connect_number)
+        : step(step), dimension(dimension), sub_index_bound(sub_index_bound), distance_type(distance_type),
           relaxed_monotonicity(relaxed_monotonicity), minimum_connect_number(minimum_connect_number)
     {
     }
@@ -102,9 +107,10 @@ template <typename Dimension_Type> class Index
     float (*distance_calculation)(const std::vector<Dimension_Type> &vector1,
                                   const std::vector<Dimension_Type> &vector2);
 
-    explicit Index(const Distance_Type distance_type, const uint64_t minimum_connect_number,
+    explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t minimum_connect_number,
                    const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound)
-        : count(0), parameters(step, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
+        : count(0),
+          parameters(step, dimension, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
     {
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
     }
@@ -576,6 +582,180 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
         Vector<Dimension_Type>(inserted_vector_global_offset, index.sub_indexes.back().count, inserted_vector);
     ++index.sub_indexes.back().count;
     add(index, index.sub_indexes.back(), index.sub_indexes.back().vectors[index.sub_indexes.back().count - 1], 0);
+}
+
+// 保存索引
+template <typename Dimension_Type> void save(Index<Dimension_Type> &index, const std::string_view &file_path)
+{
+    std::ofstream file;
+    file.open(file_path.data(), std::ios::out & std::ios::binary);
+    if (!file.is_open())
+    {
+        throw std::invalid_argument("open file failed.");
+    }
+    // 索引中的向量的数量
+    file.write((char *)&index.count, sizeof(uint64_t));
+    // 索引中的参数
+    // 步长
+    file.write((char *)&index.parameters.step, sizeof(uint64_t));
+    // 维度
+    file.write((char *)&index.parameters.dimension, sizeof(uint64_t));
+    // 子索引限制
+    file.write((char *)&index.parameters.sub_index_bound, sizeof(uint64_t));
+    // 距离限制
+    file.write((char *)&index.parameters.distance_type, sizeof(Distance_Type));
+    // 插入时提前终止条件
+    file.write((char *)&index.parameters.relaxed_monotonicity, sizeof(uint64_t));
+    // 每个向量的最小连接数量
+    file.write((char *)&index.parameters.minimum_connect_number, sizeof(uint64_t));
+    // 子索引的数量
+    auto temporary = index.sub_indexes.size();
+    file.write((char *)&temporary, sizeof(uint64_t));
+    // 保存子索引
+    for (const auto &sub_index : index.sub_indexes)
+    {
+        // 子索引中的向量的数量
+        file.write((char *)&sub_index.count, sizeof(uint64_t));
+        // 子索引最大层数
+        file.write((char *)&sub_index.layer_count, sizeof(uint64_t));
+        // 子索引中最高层中的向量的偏移量
+        file.write((char *)&sub_index.vector_in_highest_layer, sizeof(uint64_t));
+        // 保存索引中的向量
+        for (const auto &vector : sub_index.vectors)
+        {
+            // 向量的最大层数
+            file.write((char *)&vector.layer, sizeof(uint64_t));
+            // 向量在子索引中的偏移量
+            file.write((char *)&vector.offset, sizeof(uint64_t));
+            // 向量在数据集中的偏移量
+            file.write((char *)&vector.global_offset, sizeof(uint64_t));
+            // 向量的原始数据
+            file.write((char *)vector.data.data(), sizeof(Dimension_Type) * index.parameters.dimension);
+            for (auto i = 0; i < vector.layer; ++i)
+            {
+                // 出度
+                temporary = vector.out[i].size();
+                file.write((char *)&temporary, sizeof(uint64_t));
+                // 出边
+                for (auto j = vector.out[i].begin(); j != vector.out[i].end(); ++j)
+                {
+                    temporary = j->first;
+                    file.write((char *)&temporary, sizeof(float));
+                    temporary = j->second;
+                    file.write((char *)&temporary, sizeof(uint64_t));
+                }
+                // 入度
+                temporary = vector.in[i].size();
+                file.write((char *)temporary, sizeof(uint64_t));
+                // 入边
+                for (auto j = vector.in[i].begin(); j != vector.in[i].end(); ++j)
+                {
+                    temporary = j.operator*();
+                    file.write((char *)&j, sizeof(uint64_t));
+                }
+            }
+        }
+    }
+}
+
+// 读取索引
+template <typename Dimension_Type> Index<Dimension_Type> load(const std::string_view &file_path)
+{
+    std::ifstream file;
+    file.open(file_path.data(), std::ios::in & std::ios::binary);
+    if (!file.is_open())
+    {
+        throw std::invalid_argument("open file failed.");
+    }
+    // 索引中向量的数量
+    auto count = uint64_t(0);
+    file.read((char *)(&count), sizeof(uint64_t));
+    // 索引的参数
+    // 步长
+    auto step = uint64_t(0);
+    file.read((char *)(&step), sizeof(uint64_t));
+    // 维度
+    auto dimension = uint64_t(0);
+    file.read((char *)(&dimension), sizeof(uint64_t));
+    // 子索引限制
+    auto sub_index_bound = uint64_t(0);
+    file.read((char *)(&sub_index_bound), sizeof(uint64_t));
+    // 距离限制
+    auto distance_type = Distance_Type::Cosine_Similarity;
+    file.read((char *)(&distance_type), sizeof(Distance_Type));
+    // 插入时提前终止条件
+    auto relaxed_monotonicity = uint64_t(0);
+    file.read((char *)(&relaxed_monotonicity), sizeof(uint64_t));
+    // 每个向量的最小连接数量
+    auto minimum_connect_number = uint64_t(0);
+    file.read((char *)(&minimum_connect_number), sizeof(uint64_t));
+    auto index = Index<Dimension_Type>(distance_type, dimension, minimum_connect_number, relaxed_monotonicity, step,
+                                       sub_index_bound);
+    // 子的索引数量
+    auto sub_indexes_size = uint64_t(0);
+    file.read((char *)(&sub_indexes_size), sizeof(uint64_t));
+    // 读取子索引
+    for (auto i = 0; i < sub_indexes_size; ++i)
+    {
+        // 构建一个子索引
+        index.sub_indexes.emplace_back(index.parameters.sub_index_bound);
+        // 子索引中的向量的数量
+        file.read((char *)(&index.sub_indexes.back().count), sizeof(uint64_t));
+        // 子索引最大层数
+        //        auto layer_count = uint64_t(0);
+        file.read((char *)(&index.sub_indexes.back().layer_count), sizeof(uint64_t));
+        //        index.sub_indexes.back().layer_count = layer_count;
+        // 子索引中最高层中的向量的偏移量
+        //        auto vector_in_highest_layer = uint64_t(0);
+        file.read((char *)(&index.sub_indexes.back().vector_in_highest_layer), sizeof(uint64_t));
+        //        index.sub_indexes.back().vector_in_highest_layer = vector_in_highest_layer;
+        for (auto j = 0; j < index.sub_indexes.back().count; ++j)
+        {
+            // 向量的最大层数
+            auto layer = uint64_t(0);
+            file.read((char *)(&layer), sizeof(uint64_t));
+            // 向量在子索引中的偏移量
+            auto offset = uint64_t(0);
+            file.read((char *)(&offset), sizeof(uint64_t));
+            // 向量在数据集中的偏移量
+            auto global_offset = uint64_t(0);
+            file.read((char *)(&global_offset), sizeof(uint64_t));
+            // 向量的原始数据
+            auto data = std::vector<Dimension_Type>(index.parameters.dimension);
+            file.read((char *)data.data(), sizeof(Dimension_Type) * index.parameters.dimension);
+            // 构建向量
+            index.sub_indexes.back().vectors[j] = Vector<Dimension_Type>(global_offset, offset, data);
+            index.sub_indexes.back().vectors[j].layer = layer;
+            for (auto k = 0; k < index.sub_indexes.back().vectors[j].layer; ++k)
+            {
+                index.sub_indexes.back().vectors[j].out.emplace_back();
+                index.sub_indexes.back().vectors[j].in.emplace_back();
+                // 出度
+                auto out_degree = uint64_t(0);
+                file.read((char *)(&out_degree), sizeof(uint64_t));
+                // 出边
+                for (auto x = 0; x < out_degree; ++x)
+                {
+                    auto distance = float(0);
+                    auto neighbor_offset = uint64_t(0);
+                    file.read((char *)(&distance), sizeof(float));
+                    file.read((char *)(&neighbor_offset), sizeof(uint64_t));
+                    index.sub_indexes.back().vectors[j].out[k].emplace(distance, neighbor_offset);
+                }
+                // 入度
+                auto in_degree = uint64_t(0);
+                file.read((char *)(&in_degree), sizeof(uint64_t));
+                // 入边
+                for (auto x = 0; x < in_degree; ++x)
+                {
+                    auto neighbor_offset = uint64_t(0);
+                    file.read((char *)(&neighbor_offset), sizeof(uint64_t));
+                    index.sub_indexes.back().vectors[j].in[k].insert(neighbor_offset);
+                }
+            }
+        }
+    }
+    return index;
 }
 
 } // namespace dehnsw
