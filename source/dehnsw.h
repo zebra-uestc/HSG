@@ -40,11 +40,8 @@ template <typename Dimension_Type> class Vector
     std::vector<std::unordered_set<uint64_t>> in;
 
     explicit Vector(const uint64_t global_offset, const uint64_t offset, const std::vector<Dimension_Type> &data)
+        : layer(0), offset(offset), global_offset(global_offset), data(data)
     {
-        this->layer = 0;
-        this->offset = offset;
-        this->global_offset = global_offset;
-        this->data = data;
         this->out.emplace_back();
         this->in.emplace_back();
     }
@@ -63,11 +60,8 @@ template <typename Dimension_Type> class Sub_Index
     // 子索引中的向量
     std::vector<Vector<Dimension_Type>> vectors;
 
-    explicit Sub_Index(const uint64_t max_count_bound)
+    explicit Sub_Index(const uint64_t max_count_bound) : count(0), layer_count(0), vector_in_highest_layer(0)
     {
-        this->count = 0;
-        this->layer_count = 0;
-        this->vector_in_highest_layer = 0;
         this->vectors.reserve(max_count_bound);
     }
 };
@@ -88,12 +82,9 @@ class Index_Parameters
 
     explicit Index_Parameters(const uint64_t step, const uint64_t sub_index_bound, const Distance_Type distance_type,
                               const uint64_t relaxed_monotonicity, const uint64_t minimum_connect_number)
+        : step(step), sub_index_bound(sub_index_bound), distance_type(distance_type),
+          relaxed_monotonicity(relaxed_monotonicity), minimum_connect_number(minimum_connect_number)
     {
-        this->step = step;
-        this->sub_index_bound = sub_index_bound;
-        this->distance_type = distance_type;
-        this->relaxed_monotonicity = relaxed_monotonicity;
-        this->minimum_connect_number = minimum_connect_number;
     }
 };
 
@@ -113,9 +104,8 @@ template <typename Dimension_Type> class Index
 
     explicit Index(const Distance_Type distance_type, const uint64_t minimum_connect_number,
                    const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound)
-        : parameters(step, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
+        : count(0), parameters(step, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
     {
-        this->count = 0;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
     }
 };
@@ -205,7 +195,7 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
     return true;
 }
 
-// 从开始向量查询开始向量所在簇中距离最近的top-k个向量
+// 从开始向量查询距离目标向量最近的"最小连接数"个向量
 template <typename Dimension_Type>
 std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &index,
                                                    const Sub_Index<Dimension_Type> &sub_index,
@@ -273,7 +263,8 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
     return nearest_neighbors;
 }
 
-// 从开始向量查询开始向量所在簇中距离最近的top-k个向量
+// 从开始向量查询距离目标向量最近的top-k个向量
+// 该函数查询的是除最后一层外其它层中的最近邻居，所以返回的结果为向量在子索引中的偏移量
 template <typename Dimension_Type>
 std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index,
                                                   const Sub_Index<Dimension_Type> &sub_index,
@@ -341,7 +332,8 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
     return nearest_neighbors;
 }
 
-// 从开始向量查询开始向量所在簇中距离最近的top-k个向量
+// 从开始向量查询距离目标向量最近的top-k个向量
+// 该函数查询的是最后一层中的邻居，所以返回的结果为向量的全局偏移量
 template <typename Dimension_Type>
 std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Type> &index,
                                                        const Sub_Index<Dimension_Type> &sub_index,
@@ -370,7 +362,8 @@ std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Typ
             // 如果已遍历的向量小于候选数量
             if (nearest_neighbors.size() < top_k)
             {
-                nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector_offset));
+                nearest_neighbors.insert(
+                    std::make_pair(processing_distance, sub_index.vectors[processing_vector_offset].global_offset));
             }
             else
             {
@@ -378,7 +371,8 @@ std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Typ
                 if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
                 {
                     out_of_bound = 0;
-                    nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector_offset));
+                    nearest_neighbors.insert(
+                        std::make_pair(processing_distance, sub_index.vectors[processing_vector_offset].global_offset));
                     nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
                 }
                 else if (relaxed_monotonicity < out_of_bound)
