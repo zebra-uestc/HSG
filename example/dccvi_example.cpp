@@ -85,13 +85,13 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 10;
+    uint64_t query_relaxed_monotonicity = 30;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dccvi::Index<float> index(Distance_Type::Euclidean2, 12, 12, 3, 100000);
+    dccvi::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 10, 10, 3, 10000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
@@ -110,12 +110,31 @@ int main(int argc, char **argv)
         auto begin = std::chrono::high_resolution_clock::now();
         auto query_result = dccvi::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "one query costs(us): "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        //        std::cout << "one query costs(us): "
+        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         auto hit = verify(neighbors[i], query_result);
         total_hit += hit;
-        std::cout << "hit: " << hit << std::endl;
+        //        std::cout << "hit: " << hit << std::endl;
+    }
+    std::cout << "average time: " << total_time / test.size() << std::endl;
+    std::cout << "total hit: " << total_hit << std::endl;
+    dccvi::save(index, "./test_dccvi_save");
+    auto index1 = dccvi::load<float>("./test_dccvi_save");
+    total_hit = 0;
+    total_time = 0;
+    for (auto i = 0; i < test.size(); ++i)
+    {
+        auto begin = std::chrono::high_resolution_clock::now();
+        auto query_result = dccvi::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto end = std::chrono::high_resolution_clock::now();
+        //                std::cout << "one query costs(us): "
+        //                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+        //                          std::endl;
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        auto hit = verify(neighbors[i], query_result);
+        total_hit += hit;
+        //        std::cout << "hit: " << hit << std::endl;
     }
     std::cout << "average time: " << total_time / test.size() << std::endl;
     std::cout << "total hit: " << total_hit << std::endl;
