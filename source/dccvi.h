@@ -429,8 +429,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
                 auto record = *temporary;
                 deleted_edges.insert(std::make_pair(record.second, std::make_pair(record.first, neighbor.second)));
                 neighbor_vector.out[layer_number].erase(temporary);
-                sub_index.vectors[record.second & index.parameters.sub_index_bound].in[layer_number].erase(
-                    neighbor.second);
+                sub_index.vectors[record.second].in[layer_number].erase(neighbor.second);
             }
         }
         if (!connected(index, sub_index, layer_number, new_vector.offset, deleted_edges))
