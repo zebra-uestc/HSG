@@ -27,6 +27,8 @@ template <typename Dimension_Type> class Vector
   public:
     // 向量的最大层数
     uint64_t layer{};
+    // 向量在子索引中的偏移量
+    uint64_t offset{};
     // 向量在整个数据集中的偏移量
     uint64_t global_offset{};
     // 向量的原始数据
@@ -36,11 +38,9 @@ template <typename Dimension_Type> class Vector
     // 指向该向量的邻居向量
     std::vector<std::unordered_set<uint64_t>> in;
 
-    explicit Vector(const uint64_t global_offset, const std::vector<Dimension_Type> &data)
+    explicit Vector(const uint64_t global_offset, const uint64_t offset, const std::vector<Dimension_Type> &data)
+        : layer(0), offset(offset), global_offset(global_offset), data(data)
     {
-        this->layer = 0;
-        this->global_offset = global_offset;
-        this->data = data;
         this->out.emplace_back();
         this->in.emplace_back();
     }
@@ -50,6 +50,8 @@ template <typename Dimension_Type> class Vector
 template <typename Dimension_Type> class Sub_Index
 {
   public:
+    // 子索引中的向量数量
+    uint64_t count{};
     // 子索引最大层数
     uint64_t layer_count{};
     // 最高层中的向量的全局偏移量
@@ -57,11 +59,9 @@ template <typename Dimension_Type> class Sub_Index
     // 子索引中的向量
     std::vector<Vector<Dimension_Type>> vectors;
 
-    explicit Sub_Index(const uint64_t max_count_bound)
+    explicit Sub_Index(const uint64_t max_count_bound) : count(0), layer_count(0), vector_in_highest_layer(0)
     {
-        this->layer_count = 0;
-        this->vector_in_highest_layer = 0;
-        this->vectors.reserve(max_count_bound + 1);
+        this->vectors.reserve(max_count_bound);
     }
 };
 
@@ -81,12 +81,9 @@ class Index_Parameters
 
     explicit Index_Parameters(const uint64_t step, const uint64_t sub_index_bound, const Distance_Type distance_type,
                               const uint64_t relaxed_monotonicity, const uint64_t minimum_connect_number)
+        : step(step), sub_index_bound(sub_index_bound), distance_type(distance_type),
+          relaxed_monotonicity(relaxed_monotonicity), minimum_connect_number(minimum_connect_number)
     {
-        this->step = step;
-        this->sub_index_bound = sub_index_bound;
-        this->distance_type = distance_type;
-        this->relaxed_monotonicity = relaxed_monotonicity;
-        this->minimum_connect_number = minimum_connect_number;
     }
 };
 
@@ -105,10 +102,9 @@ template <typename Dimension_Type> class Index
                                   const std::vector<Dimension_Type> &vector2);
 
     explicit Index(const Distance_Type distance_type, const uint64_t minimum_connect_number,
-                   const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound = 0x1FFFF)
-        : parameters(step, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
+                   const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound)
+        : count(0), parameters(step, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
     {
-        this->count = 0;
         this->distance_calculation = get_distance_calculation_function<Dimension_Type>(distance_type);
     }
 };
@@ -132,11 +128,10 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
     for (auto round = 0; round < 4; ++round)
     {
         // 遍历上一轮中被遍历到的向量的所有邻居向量
-        for (const auto &last_vector_global_offset : last)
+        for (const auto &last_vector_offset : last)
         {
             // 遍历出边
-            for (const auto &neighbor :
-                 sub_index.vectors[last_vector_global_offset & index.parameters.sub_index_bound].out[layer_number])
+            for (const auto &neighbor : sub_index.vectors[last_vector_offset].out[layer_number])
             {
                 deleted_edges.erase(neighbor.second);
                 // 如果插入成功
@@ -148,16 +143,15 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
                 }
             }
             // 遍历入边
-            for (const auto &neighbor_global_offset :
-                 sub_index.vectors[last_vector_global_offset & index.parameters.sub_index_bound].in[layer_number])
+            for (const auto &neighbor_offset : sub_index.vectors[last_vector_offset].in[layer_number])
             {
-                deleted_edges.erase(neighbor_global_offset);
+                deleted_edges.erase(neighbor_offset);
                 // 如果插入成功
                 // 即
                 // 还没有被遍历过
-                if (flag.insert(neighbor_global_offset).second)
+                if (flag.insert(neighbor_offset).second)
                 {
-                    next.insert(neighbor_global_offset);
+                    next.insert(neighbor_offset);
                 }
             }
         }
@@ -186,11 +180,10 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
     for (auto round = 0; round < index.parameters.step; ++round)
     {
         // 遍历上一轮中被遍历到的向量的所有邻居向量
-        for (auto &last_vector_global_offset : last)
+        for (auto &last_vector_offset : last)
         {
             // 遍历出边
-            for (auto &neighbor :
-                 sub_index.vectors[last_vector_global_offset & index.parameters.sub_index_bound].out[layer_number])
+            for (auto &neighbor : sub_index.vectors[last_vector_offset].out[layer_number])
             {
                 // 如果插入成功
                 // 即
@@ -199,7 +192,7 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
                 {
                     // 如果在step内有向量被选则添加到上一层
                     // 则该向量不需要被添加到上一层
-                    if (layer_number < sub_index.vectors[neighbor.second & index.parameters.sub_index_bound].layer)
+                    if (layer_number < sub_index.vectors[neighbor.second].layer)
                     {
                         return false;
                     }
@@ -207,22 +200,20 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
                 }
             }
             // 遍历入边
-            for (auto &neighbor_global_offset :
-                 sub_index.vectors[last_vector_global_offset & index.parameters.sub_index_bound].in[layer_number])
+            for (auto &neighbor_offset : sub_index.vectors[last_vector_offset].in[layer_number])
             {
                 // 如果插入成功
                 // 即
                 // 还没有被遍历过
-                if (flag.insert(neighbor_global_offset).second)
+                if (flag.insert(neighbor_offset).second)
                 {
                     // 如果在step内有向量被选则添加到上一层
                     // 则该向量不需要被添加到上一层
-                    if (layer_number <
-                        sub_index.vectors[neighbor_global_offset & index.parameters.sub_index_bound].layer)
+                    if (layer_number < sub_index.vectors[neighbor_offset].layer)
                     {
                         return false;
                     }
-                    next.insert(neighbor_global_offset);
+                    next.insert(neighbor_offset);
                 }
             }
         }
@@ -247,19 +238,18 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
     std::unordered_set<uint64_t> flags;
     // 排队队列
     auto waiting_vectors = std::map<float, uint64_t>();
-    waiting_vectors.insert(std::make_pair(
-        index.distance_calculation(query_vector, sub_index.vectors[start & index.parameters.sub_index_bound].data),
-        start));
+    waiting_vectors.insert(
+        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[start].data), start));
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
-        auto processing_vector = waiting_vectors.begin()->second;
+        auto processing_vector_offset = waiting_vectors.begin()->second;
         waiting_vectors.erase(waiting_vectors.begin());
-        flags.insert(processing_vector);
+        flags.insert(processing_vector_offset);
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < index.parameters.minimum_connect_number)
         {
-            nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
+            nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector_offset));
         }
         else
         {
@@ -267,7 +257,7 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
             if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
             {
                 out_of_bound = 0;
-                nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
+                nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector_offset));
                 nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
             }
             else if (index.parameters.relaxed_monotonicity < out_of_bound)
@@ -279,31 +269,26 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
                 ++out_of_bound;
             }
         }
-        for (auto i = layer_number; i <= sub_index.vectors[processing_vector & index.parameters.sub_index_bound].layer;
-             ++i)
+        for (auto i = layer_number; i <= sub_index.vectors[processing_vector_offset].layer; ++i)
         {
             // 计算当前向量的出边指向的向量和目标向量的距离
-            for (auto &vector : sub_index.vectors[processing_vector & index.parameters.sub_index_bound].out[i])
+            for (auto &vector : sub_index.vectors[processing_vector_offset].out[i])
             {
                 if (flags.insert(vector.second).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(
-                            query_vector, sub_index.vectors[vector.second & index.parameters.sub_index_bound].data),
-                        vector.second));
+                    waiting_vectors.insert(
+                        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[vector.second].data),
+                                       vector.second));
                 }
             }
             // 计算当前向量的入边指向的向量和目标向量的距离
-            for (auto &vector_global_offset :
-                 sub_index.vectors[processing_vector & index.parameters.sub_index_bound].in[i])
+            for (auto &vector_offset : sub_index.vectors[processing_vector_offset].in[i])
             {
-                if (flags.insert(vector_global_offset).second)
+                if (flags.insert(vector_offset).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(
-                            query_vector,
-                            sub_index.vectors[vector_global_offset & index.parameters.sub_index_bound].data),
-                        vector_global_offset));
+                    waiting_vectors.insert(
+                        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[vector_offset].data),
+                                       vector_offset));
                 }
             }
         }
@@ -327,20 +312,20 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
     std::unordered_set<uint64_t> flags;
     // 排队队列
     auto waiting_vectors = std::map<float, uint64_t>();
-    waiting_vectors.insert(std::make_pair(
-        index.distance_calculation(query_vector, sub_index.vectors[start & index.parameters.sub_index_bound].data),
-        start));
+    waiting_vectors.insert(
+        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[start].data), start));
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
-        auto processing_vector = waiting_vectors.begin()->second;
+        auto processing_vector_offset = waiting_vectors.begin()->second;
         waiting_vectors.erase(waiting_vectors.begin());
-        flags.insert(processing_vector);
+        flags.insert(processing_vector_offset);
         if (processing_distance < distance_bound)
         { // 如果已遍历的向量小于候选数量
             if (nearest_neighbors.size() < top_k)
             {
-                nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
+                nearest_neighbors.emplace(processing_distance,
+                                          sub_index.vectors[processing_vector_offset].global_offset);
             }
             else
             {
@@ -348,7 +333,8 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                 if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
                 {
                     out_of_bound = 0;
-                    nearest_neighbors.insert(std::make_pair(processing_distance, processing_vector));
+                    nearest_neighbors.emplace(processing_distance,
+                                              sub_index.vectors[processing_vector_offset].global_offset);
                     nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
                 }
                 else if (relaxed_monotonicity < out_of_bound)
@@ -372,31 +358,26 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                 ++out_of_bound;
             }
         }
-        for (auto i = layer_number; i <= sub_index.vectors[processing_vector & index.parameters.sub_index_bound].layer;
-             ++i)
+        for (auto i = layer_number; i <= sub_index.vectors[processing_vector_offset].layer; ++i)
         {
             // 计算当前向量的出边指向的向量和目标向量的距离
-            for (auto &vector : sub_index.vectors[processing_vector & index.parameters.sub_index_bound].out[i])
+            for (auto &vector : sub_index.vectors[processing_vector_offset].out[i])
             {
                 if (flags.insert(vector.second).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(
-                            query_vector, sub_index.vectors[vector.second & index.parameters.sub_index_bound].data),
-                        vector.second));
+                    waiting_vectors.insert(
+                        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[vector.second].data),
+                                       vector.second));
                 }
             }
             // 计算当前向量的入边指向的向量和目标向量的距离
-            for (auto &vector_global_offset :
-                 sub_index.vectors[processing_vector & index.parameters.sub_index_bound].in[i])
+            for (auto &vector_offset : sub_index.vectors[processing_vector_offset].in[i])
             {
-                if (flags.insert(vector_global_offset).second)
+                if (flags.insert(vector_offset).second)
                 {
-                    waiting_vectors.insert(std::make_pair(
-                        index.distance_calculation(
-                            query_vector,
-                            sub_index.vectors[vector_global_offset & index.parameters.sub_index_bound].data),
-                        vector_global_offset));
+                    waiting_vectors.insert(
+                        std::make_pair(index.distance_calculation(query_vector, sub_index.vectors[vector_offset].data),
+                                       vector_offset));
                 }
             }
         }
@@ -429,15 +410,15 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
         {
             // 将新的向量指向邻居向量
             new_vector.out[layer_number].insert(neighbor);
-            auto &neighbor_vector = sub_index.vectors[neighbor.second & index.parameters.sub_index_bound];
+            auto &neighbor_vector = sub_index.vectors[neighbor.second];
             // 在邻居向量中记录指向自己的新向量
-            neighbor_vector.in[layer_number].insert(new_vector.global_offset);
+            neighbor_vector.in[layer_number].insert(new_vector.offset);
             // 新向量和邻居向量的距离小于邻居向量已指向的10个向量的距离
             if (neighbor_vector.out[layer_number].size() < index.parameters.minimum_connect_number ||
                 neighbor_vector.out[layer_number].upper_bound(neighbor.first) !=
                     neighbor_vector.out[layer_number].end())
             {
-                neighbor_vector.out[layer_number].insert(std::pair(neighbor.first, new_vector.global_offset));
+                neighbor_vector.out[layer_number].insert(std::pair(neighbor.first, new_vector.offset));
                 new_vector.in[layer_number].insert(neighbor.second);
             }
             // 如果邻居向量的出度大于最大出度数量
@@ -452,18 +433,16 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
                     neighbor.second);
             }
         }
-        if (!connected(index, sub_index, layer_number, new_vector.global_offset, deleted_edges))
+        if (!connected(index, sub_index, layer_number, new_vector.offset, deleted_edges))
         {
             for (const auto &edge : deleted_edges)
             {
-                sub_index.vectors[edge.second.second & index.parameters.sub_index_bound].out[layer_number].insert(
-                    std::make_pair(edge.second.first, edge.first));
-                sub_index.vectors[edge.first & index.parameters.sub_index_bound].in[layer_number].insert(
-                    edge.second.second);
+                sub_index.vectors[edge.second.second].out[layer_number].emplace(edge.second.first, edge.first);
+                sub_index.vectors[edge.first].in[layer_number].insert(edge.second.second);
             }
         }
         // 如果新向量应该被插入上一层中
-        if (insert_to_upper_layer(index, sub_index, layer_number, new_vector.global_offset))
+        if (insert_to_upper_layer(index, sub_index, layer_number, new_vector.offset))
         {
             every_layer_neighbors.pop();
             ++new_vector.layer;
@@ -472,7 +451,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
             if (sub_index.layer_count == layer_number)
             {
                 ++sub_index.layer_count;
-                sub_index.vector_in_highest_layer = new_vector.global_offset;
+                sub_index.vector_in_highest_layer = new_vector.offset;
                 break;
             }
         }
@@ -540,17 +519,17 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     // 插入向量在原始数据中的偏移量
     uint64_t inserted_vector_global_offset = index.count;
     ++index.count;
-    // 如果是空的索引
-    if ((inserted_vector_global_offset & index.parameters.sub_index_bound) == 0)
+    if (inserted_vector_global_offset % index.parameters.sub_index_bound == 0)
     {
         index.sub_indexes.emplace_back(Sub_Index<Dimension_Type>(index.parameters.sub_index_bound));
-        index.sub_indexes.back().vectors[0] = Vector<Dimension_Type>(inserted_vector_global_offset, inserted_vector);
+        index.sub_indexes.back().vectors[0] = Vector<Dimension_Type>(inserted_vector_global_offset, 0, inserted_vector);
+        ++index.sub_indexes.back().count;
         return;
     }
-    index.sub_indexes.back().vectors[inserted_vector_global_offset & index.parameters.sub_index_bound] =
-        Vector<Dimension_Type>(inserted_vector_global_offset, inserted_vector);
-    add(index, index.sub_indexes.back(),
-        index.sub_indexes.back().vectors[inserted_vector_global_offset & index.parameters.sub_index_bound]);
+    index.sub_indexes.back().vectors[index.sub_indexes.back().count] =
+        Vector<Dimension_Type>(inserted_vector_global_offset, index.sub_indexes.back().count, inserted_vector);
+    ++index.sub_indexes.back().count;
+    add(index, index.sub_indexes.back(), index.sub_indexes.back().vectors[index.sub_indexes.back().count - 1]);
 }
 
 } // namespace dccvi

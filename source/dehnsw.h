@@ -362,8 +362,8 @@ std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Typ
             // 如果已遍历的向量小于候选数量
             if (nearest_neighbors.size() < top_k)
             {
-                nearest_neighbors.insert(
-                    std::make_pair(processing_distance, sub_index.vectors[processing_vector_offset].global_offset));
+                nearest_neighbors.emplace(processing_distance,
+                                          sub_index.vectors[processing_vector_offset].global_offset);
             }
             else
             {
@@ -371,8 +371,8 @@ std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Typ
                 if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
                 {
                     out_of_bound = 0;
-                    nearest_neighbors.insert(
-                        std::make_pair(processing_distance, sub_index.vectors[processing_vector_offset].global_offset));
+                    nearest_neighbors.emplace(processing_distance,
+                                              sub_index.vectors[processing_vector_offset].global_offset);
                     nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
                 }
                 else if (relaxed_monotonicity < out_of_bound)
@@ -568,8 +568,7 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
     if (inserted_vector_global_offset % index.parameters.sub_index_bound == 0)
     {
         index.sub_indexes.emplace_back(Sub_Index<Dimension_Type>(index.parameters.sub_index_bound));
-        index.sub_indexes.back().vectors[index.sub_indexes.back().count] =
-            Vector<Dimension_Type>(inserted_vector_global_offset, index.sub_indexes.back().count, inserted_vector);
+        index.sub_indexes.back().vectors[0] = Vector<Dimension_Type>(inserted_vector_global_offset, 0, inserted_vector);
         ++index.sub_indexes.back().count;
         return;
     }
