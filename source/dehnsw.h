@@ -135,12 +135,12 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
                     next.insert(neighbor.second);
                 }
             }
-            for (const auto &neighbor_global_offset : sub_index.vectors[last_vector_offset].in[layer_number])
+            for (const auto &neighbor_offset : sub_index.vectors[last_vector_offset].in[layer_number])
             {
-                deleted_edges.erase(neighbor_global_offset);
-                if (flag.insert(neighbor_global_offset).second)
+                deleted_edges.erase(neighbor_offset);
+                if (flag.insert(neighbor_offset).second)
                 {
-                    next.insert(neighbor_global_offset);
+                    next.insert(neighbor_offset);
                 }
             }
         }
@@ -465,7 +465,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
                 sub_index.vectors[record.second].in[target_layer_number].erase(neighbor.second);
             }
         }
-        if (!connected(index, sub_index, target_layer_number, new_vector.global_offset, deleted_edges))
+        if (!connected(index, sub_index, target_layer_number, new_vector.offset, deleted_edges))
         {
             for (const auto &edge : deleted_edges)
             {

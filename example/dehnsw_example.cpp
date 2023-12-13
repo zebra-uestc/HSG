@@ -85,13 +85,13 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 50;
+    uint64_t query_relaxed_monotonicity = 100;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, 10, 20, 3, 100000);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, 10, 10, 4, 100000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
