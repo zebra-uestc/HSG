@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, 10, 20, 3, 0xFFFF);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
