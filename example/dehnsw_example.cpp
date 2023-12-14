@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = dehnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = dehnsw::query<float>(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         //                std::cout << "one query costs(us): "
         //                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
