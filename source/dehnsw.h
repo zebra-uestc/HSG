@@ -132,17 +132,17 @@ bool connected(const Index<Dimension_Type> &index, const Sub_Index<Dimension_Typ
         {
             for (const auto &neighbor : sub_index.vectors[last_vector_offset].out[layer_number])
             {
-                deleted_edges.erase(neighbor.second);
                 if (flag.insert(neighbor.second).second)
                 {
+                    deleted_edges.erase(neighbor.second);
                     next.insert(neighbor.second);
                 }
             }
             for (const auto &neighbor_offset : sub_index.vectors[last_vector_offset].in[layer_number])
             {
-                deleted_edges.erase(neighbor_offset);
                 if (flag.insert(neighbor_offset).second)
                 {
+                    deleted_edges.erase(neighbor_offset);
                     next.insert(neighbor_offset);
                 }
             }
@@ -165,6 +165,7 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
     auto next = std::unordered_set<uint64_t>();
     auto flag = std::unordered_set<uint64_t>();
     last.insert(vector_offset);
+    flag.insert(vector_offset);
     for (auto round = 0; round < index.parameters.step; ++round)
     {
         for (const auto &last_vector_offset : last)

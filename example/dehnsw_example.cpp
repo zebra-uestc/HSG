@@ -91,15 +91,15 @@ int main(int argc, char **argv)
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 10, 10, 3, 10000);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 10, 10, 3, 10000000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
         dehnsw::insert(index, train[i]);
         auto end = std::chrono::high_resolution_clock::now();
-        std::cout << "inserted ths " << i << "th vector, costs(us): "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        //        std::cout << "inserted ths " << i << "th vector, costs(us): "
+        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
     }
     std::cout << "building index consts(us): " << total_time << std::endl;
@@ -119,8 +119,8 @@ int main(int argc, char **argv)
     }
     std::cout << "average time: " << total_time / test.size() << std::endl;
     std::cout << "total hit: " << total_hit << std::endl;
-    dehnsw::save(index, "./test_dccvi_save");
-    auto index1 = dehnsw::load<float>("./test_dccvi_save");
+    dehnsw::save(index, "./test_dehnsw_save");
+    auto index1 = dehnsw::load<float>("./test_dehnsw_save");
     total_hit = 0;
     total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
