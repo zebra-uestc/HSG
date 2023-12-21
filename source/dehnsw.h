@@ -577,6 +577,53 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
         ++index.sub_indexes.back().count;
         return;
     }
+    switch (index.sub_indexes.back().count)
+    {
+    case 0:
+        index.parameters.minimum_connect_number = 10;
+        index.parameters.relaxed_monotonicity = 10;
+        break;
+    case 100000:
+        index.parameters.minimum_connect_number = 11;
+        index.parameters.relaxed_monotonicity = 11;
+        break;
+    case 200000:
+        index.parameters.minimum_connect_number = 12;
+        index.parameters.relaxed_monotonicity = 12;
+        break;
+    case 300000:
+        index.parameters.minimum_connect_number = 13;
+        index.parameters.relaxed_monotonicity = 13;
+        break;
+    case 400000:
+        index.parameters.minimum_connect_number = 14;
+        index.parameters.relaxed_monotonicity = 14;
+        break;
+    case 500000:
+        index.parameters.minimum_connect_number = 15;
+        index.parameters.relaxed_monotonicity = 15;
+        break;
+    case 600000:
+        index.parameters.minimum_connect_number = 16;
+        index.parameters.relaxed_monotonicity = 16;
+        break;
+    case 700000:
+        index.parameters.minimum_connect_number = 17;
+        index.parameters.relaxed_monotonicity = 17;
+        break;
+    case 800000:
+        index.parameters.minimum_connect_number = 18;
+        index.parameters.relaxed_monotonicity = 18;
+        break;
+    case 900000:
+        index.parameters.minimum_connect_number = 19;
+        index.parameters.relaxed_monotonicity = 19;
+        break;
+    case 1000000:
+        index.parameters.minimum_connect_number = 20;
+        index.parameters.relaxed_monotonicity = 20;
+        break;
+    }
     index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, index.sub_indexes.back().count,
                                                   inserted_vector);
     ++index.sub_indexes.back().count;
