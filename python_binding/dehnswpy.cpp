@@ -6,17 +6,17 @@
 
 namespace py = pybind11;
 
-std::vector<uint64_t> wrapped_query(const dehnsw::Index<float> &index, const std::vector<float> &query_vector,
-                                    uint64_t top_k, uint64_t relaxed_monotonicity = 0)
-{
-    auto result = std::vector<uint64_t>();
-    result.reserve(top_k);
-    for (const auto &i : dehnsw::query(index, query_vector, top_k, relaxed_monotonicity))
-    {
-        result.push_back(i.second);
-    }
-    return result;
-}
+// std::vector<uint64_t> wrapped_query(const dehnsw::Index<float> &index, const std::vector<float> &query_vector,
+//                                     uint64_t top_k, uint64_t relaxed_monotonicity = 0)
+//{
+//     auto result = std::vector<uint64_t>();
+//     result.reserve(top_k);
+//     for (const auto &i : dehnsw::query(index, query_vector, top_k, relaxed_monotonicity))
+//     {
+//         result.push_back(i.second);
+//     }
+//     return result;
+// }
 
 PYBIND11_MODULE(dehnswpy, index)
 {
@@ -28,5 +28,5 @@ PYBIND11_MODULE(dehnswpy, index)
         .value("Inner_Product", Distance_Type::Inner_Product)
         .value("Cosine_Similarity", Distance_Type::Cosine_Similarity);
     index.def("insert", &dehnsw::insert<float>, "Insert a vector into index.");
-    index.def("query", &wrapped_query, "query the most k-th nearest neighbors of a vector.");
+    index.def("query", &dehnsw::query<float>, "query the most k-th nearest neighbors of a vector.");
 }
