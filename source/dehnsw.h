@@ -271,9 +271,8 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
 template <typename Dimension_Type>
 std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index,
                                                   const Sub_Index<Dimension_Type> &sub_index,
-                                                  const uint64_t layer_number,
-                                                  const std::vector<Dimension_Type> &query_vector, const uint64_t start,
-                                                  const uint64_t top_k, const uint64_t relaxed_monotonicity)
+                                                  const std::vector<Dimension_Type> &query_vector, const uint64_t top_k,
+                                                  const uint64_t relaxed_monotonicity)
 {
     // 优先队列
     auto nearest_neighbors = std::map<float, uint64_t>();
@@ -281,18 +280,45 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
     std::unordered_set<uint64_t> flags;
     uint64_t out_of_bound = 0;
     // 排队队列
-    auto waiting_vectors = std::map<float, uint64_t>();
-    waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[start].data), start);
+    auto waiting_vectors = std::map<float, std::pair<uint64_t, uint64_t>>();
+    waiting_vectors.emplace(
+        index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
+        std::make_pair(sub_index.layer_count, sub_index.vector_in_highest_layer));
+    //    flags.insert(sub_index.vector_in_highest_layer);
+    //    for (uint64_t layer_number = 0; layer_number <= sub_index.layer_count; ++layer_number)
+    //    {
+    //        // 计算当前向量的出边指向的向量和目标向量的距离
+    //        for (auto &vector : sub_index.vectors[sub_index.vector_in_highest_layer].out[layer_number])
+    //        {
+    //            if (flags.insert(vector.second).second)
+    //            {
+    //                waiting_vectors.emplace(index.distance_calculation(query_vector,
+    //                sub_index.vectors[vector.second].data),
+    //                                        layer_number, vector.second);
+    //            }
+    //        }
+    //        // 计算当前向量的入边指向的向量和目标向量的距离
+    //        for (auto &vector_offset : sub_index.vectors[sub_index.vector_in_highest_layer].in[layer_number])
+    //        {
+    //            if (flags.insert(vector_offset).second)
+    //            {
+    //                waiting_vectors.emplace(index.distance_calculation(query_vector,
+    //                sub_index.vectors[vector_offset].data),
+    //                                        layer_number, vector_offset);
+    //            }
+    //        }
+    //    }
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
-        auto processing_vector_offset = waiting_vectors.begin()->second;
+        auto processing_layer_number = waiting_vectors.begin()->second.first;
+        auto processing_vector_offset = waiting_vectors.begin()->second.second;
         waiting_vectors.erase(waiting_vectors.begin());
         flags.insert(processing_vector_offset);
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < top_k)
         {
-            nearest_neighbors.emplace(processing_distance, processing_vector_offset);
+            nearest_neighbors.emplace(processing_distance, sub_index.vectors[processing_vector_offset].global_offset);
         }
         else
         {
@@ -300,7 +326,8 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
             if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
             {
                 out_of_bound = 0;
-                nearest_neighbors.emplace(processing_distance, processing_vector_offset);
+                nearest_neighbors.emplace(processing_distance,
+                                          sub_index.vectors[processing_vector_offset].global_offset);
                 nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
             }
             else if (relaxed_monotonicity < out_of_bound)
@@ -312,22 +339,27 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
                 ++out_of_bound;
             }
         }
-        // 计算当前向量的出边指向的向量和目标向量的距离
-        for (auto &vector : sub_index.vectors[processing_vector_offset].out[layer_number])
+        for (uint64_t layer_number = 0; layer_number <= processing_layer_number; ++layer_number)
         {
-            if (flags.insert(vector.second).second)
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            for (auto &vector : sub_index.vectors[processing_vector_offset].out[layer_number])
             {
-                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector.second].data),
-                                        vector.second);
+                if (flags.insert(vector.second).second)
+                {
+                    waiting_vectors.emplace(
+                        index.distance_calculation(query_vector, sub_index.vectors[vector.second].data),
+                        std::make_pair(layer_number, vector.second));
+                }
             }
-        }
-        // 计算当前向量的入边指向的向量和目标向量的距离
-        for (auto &vector_offset : sub_index.vectors[processing_vector_offset].in[layer_number])
-        {
-            if (flags.insert(vector_offset).second)
+            // 计算当前向量的入边指向的向量和目标向量的距离
+            for (auto &vector_offset : sub_index.vectors[processing_vector_offset].in[layer_number])
             {
-                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector_offset].data),
-                                        vector_offset);
+                if (flags.insert(vector_offset).second)
+                {
+                    waiting_vectors.emplace(
+                        index.distance_calculation(query_vector, sub_index.vectors[vector_offset].data),
+                        std::make_pair(layer_number, vector_offset));
+                }
             }
         }
     }
@@ -337,12 +369,10 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是最后一层中的邻居，所以返回的结果为向量的全局偏移量
 template <typename Dimension_Type>
-std::map<float, uint64_t> nearest_neighbors_last_layer(const Index<Dimension_Type> &index,
-                                                       const Sub_Index<Dimension_Type> &sub_index,
-                                                       const uint64_t layer_number,
-                                                       const std::vector<Dimension_Type> &query_vector,
-                                                       const uint64_t start, const uint64_t top_k,
-                                                       const uint64_t relaxed_monotonicity, const float distance_bound)
+std::map<float, uint64_t> nearest_neighbors_query_with_bound(
+    const Index<Dimension_Type> &index, const Sub_Index<Dimension_Type> &sub_index, const uint64_t layer_number,
+    const std::vector<Dimension_Type> &query_vector, const uint64_t start, const uint64_t top_k,
+    const uint64_t relaxed_monotonicity, const float distance_bound)
 {
     // 优先队列
     auto nearest_neighbors = std::map<float, uint64_t>();
@@ -504,8 +534,8 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
 
 // 查询
 template <typename Dimension_Type>
-std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::vector<Dimension_Type> &query_vector,
-                                uint64_t top_k, uint64_t relaxed_monotonicity = 0)
+std::vector<uint64_t> query(const Index<Dimension_Type> &index, const std::vector<Dimension_Type> &query_vector,
+                            uint64_t top_k, uint64_t relaxed_monotonicity = 0)
 {
     //    if (index.vectors.empty())
     //    {
@@ -516,46 +546,77 @@ std::map<float, uint64_t> query(const Index<Dimension_Type> &index, const std::v
     //        throw std::invalid_argument("The dimension of query vector is not "
     //                                    "equality with vectors in index. ");
     //    }
-    if (relaxed_monotonicity == 0)
+    //    if (relaxed_monotonicity == 0)
+    //    {
+    //        relaxed_monotonicity = top_k;
+    //    }
+    auto result = std::vector<uint64_t>();
+    result.reserve(top_k);
+    for (const auto &i :
+         nearest_neighbors_query(index, index.sub_indexes[0], query_vector, top_k, relaxed_monotonicity))
     {
-        relaxed_monotonicity = top_k;
-    }
-    auto result = std::map<float, uint64_t>();
-    float distance_bound = MAXFLOAT;
-    auto one_sub_index_result = std::map<float, uint64_t>();
-    for (const auto &sub_index : index.sub_indexes)
-    {
-        //        auto begin = std::chrono::high_resolution_clock::now();
-        one_sub_index_result.emplace(
-            index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
-            sub_index.vector_in_highest_layer);
-        if (sub_index.layer_count != 0)
-        {
-            // 逐层扫描
-            for (uint64_t i = sub_index.layer_count - 1; 0 < i; --i)
-            {
-                one_sub_index_result = nearest_neighbors_query(index, sub_index, i, query_vector,
-                                                               one_sub_index_result.begin()->second, 1, 10);
-            }
-            one_sub_index_result =
-                nearest_neighbors_last_layer(index, sub_index, 0, query_vector, one_sub_index_result.begin()->second,
-                                             top_k, relaxed_monotonicity, distance_bound);
-        }
-        result.insert(one_sub_index_result.begin(), one_sub_index_result.end());
-        one_sub_index_result.clear();
-        if (top_k < result.size())
-        {
-            auto temporary = result.begin();
-            std::advance(temporary, top_k);
-            result.erase(temporary, result.end());
-        }
-        distance_bound = std::prev(result.end())->first;
-        //        auto end = std::chrono::high_resolution_clock::now();
-        //        std::cout << "one sub-index costs(us): "
-        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        result.push_back(i.second);
     }
     return result;
 }
+
+// 带有子索引的查询
+// template <typename Dimension_Type>
+// std::map<float, uint64_t> query_with_sub_index(const Index<Dimension_Type> &index,
+//                                               const std::vector<Dimension_Type> &query_vector, uint64_t top_k,
+//                                               uint64_t relaxed_monotonicity = 0)
+//{
+//    //    if (index.vectors.empty())
+//    //    {
+//    //        throw std::logic_error("Empty vectors in index. ");
+//    //    }
+//    //    if (query_vector.size() != index.vectors[0].data.size())
+//    //    {
+//    //        throw std::invalid_argument("The dimension of query vector is not "
+//    //                                    "equality with vectors in index. ");
+//    //    }
+//    if (relaxed_monotonicity == 0)
+//    {
+//        relaxed_monotonicity = top_k;
+//    }
+//    auto result = std::map<float, uint64_t>();
+//    float distance_bound = MAXFLOAT;
+//    auto one_sub_index_result = std::map<float, uint64_t>();
+//    for (const auto &sub_index : index.sub_indexes)
+//    {
+//        //        auto begin = std::chrono::high_resolution_clock::now();
+//        one_sub_index_result.emplace(
+//            index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
+//            sub_index.vector_in_highest_layer);
+//        if (sub_index.layer_count != 0)
+//        {
+//            // 逐层扫描
+//            for (uint64_t i = sub_index.layer_count - 1; 0 < i; --i)
+//            {
+//                one_sub_index_result = nearest_neighbors_query(index, sub_index, i, query_vector,
+//                                                               one_sub_index_result.begin()->second, 1, 10);
+//            }
+//            one_sub_index_result =
+//                nearest_neighbors_last_layer(index, sub_index, 0, query_vector,
+//                one_sub_index_result.begin()->second,
+//                                             top_k, relaxed_monotonicity, distance_bound);
+//        }
+//        result.insert(one_sub_index_result.begin(), one_sub_index_result.end());
+//        one_sub_index_result.clear();
+//        if (top_k < result.size())
+//        {
+//            auto temporary = result.begin();
+//            std::advance(temporary, top_k);
+//            result.erase(temporary, result.end());
+//        }
+//        distance_bound = std::prev(result.end())->first;
+//        //        auto end = std::chrono::high_resolution_clock::now();
+//        //        std::cout << "one sub-index costs(us): "
+//        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+//        std::endl;
+//    }
+//    return result;
+//}
 
 // 插入
 template <typename Dimension_Type>
@@ -577,53 +638,53 @@ void insert(Index<Dimension_Type> &index, const std::vector<Dimension_Type> &ins
         ++index.sub_indexes.back().count;
         return;
     }
-    switch (index.sub_indexes.back().count)
-    {
-    case 0:
-        index.parameters.minimum_connect_number = 10;
-        index.parameters.relaxed_monotonicity = 10;
-        break;
-    case 100000:
-        index.parameters.minimum_connect_number = 11;
-        index.parameters.relaxed_monotonicity = 11;
-        break;
-    case 200000:
-        index.parameters.minimum_connect_number = 12;
-        index.parameters.relaxed_monotonicity = 12;
-        break;
-    case 300000:
-        index.parameters.minimum_connect_number = 13;
-        index.parameters.relaxed_monotonicity = 13;
-        break;
-    case 400000:
-        index.parameters.minimum_connect_number = 14;
-        index.parameters.relaxed_monotonicity = 14;
-        break;
-    case 500000:
-        index.parameters.minimum_connect_number = 15;
-        index.parameters.relaxed_monotonicity = 15;
-        break;
-    case 600000:
-        index.parameters.minimum_connect_number = 16;
-        index.parameters.relaxed_monotonicity = 16;
-        break;
-    case 700000:
-        index.parameters.minimum_connect_number = 17;
-        index.parameters.relaxed_monotonicity = 17;
-        break;
-    case 800000:
-        index.parameters.minimum_connect_number = 18;
-        index.parameters.relaxed_monotonicity = 18;
-        break;
-    case 900000:
-        index.parameters.minimum_connect_number = 19;
-        index.parameters.relaxed_monotonicity = 19;
-        break;
-    case 1000000:
-        index.parameters.minimum_connect_number = 20;
-        index.parameters.relaxed_monotonicity = 20;
-        break;
-    }
+    //    switch (index.sub_indexes.back().count)
+    //    {
+    //    case 0:
+    //        index.parameters.minimum_connect_number = 10;
+    //        index.parameters.relaxed_monotonicity = 10;
+    //        break;
+    //    case 100000:
+    //        index.parameters.minimum_connect_number = 11;
+    //        index.parameters.relaxed_monotonicity = 11;
+    //        break;
+    //    case 200000:
+    //        index.parameters.minimum_connect_number = 12;
+    //        index.parameters.relaxed_monotonicity = 12;
+    //        break;
+    //    case 300000:
+    //        index.parameters.minimum_connect_number = 13;
+    //        index.parameters.relaxed_monotonicity = 13;
+    //        break;
+    //    case 400000:
+    //        index.parameters.minimum_connect_number = 14;
+    //        index.parameters.relaxed_monotonicity = 14;
+    //        break;
+    //    case 500000:
+    //        index.parameters.minimum_connect_number = 15;
+    //        index.parameters.relaxed_monotonicity = 15;
+    //        break;
+    //    case 600000:
+    //        index.parameters.minimum_connect_number = 16;
+    //        index.parameters.relaxed_monotonicity = 16;
+    //        break;
+    //    case 700000:
+    //        index.parameters.minimum_connect_number = 17;
+    //        index.parameters.relaxed_monotonicity = 17;
+    //        break;
+    //    case 800000:
+    //        index.parameters.minimum_connect_number = 18;
+    //        index.parameters.relaxed_monotonicity = 18;
+    //        break;
+    //    case 900000:
+    //        index.parameters.minimum_connect_number = 19;
+    //        index.parameters.relaxed_monotonicity = 19;
+    //        break;
+    //    case 1000000:
+    //        index.parameters.minimum_connect_number = 20;
+    //        index.parameters.relaxed_monotonicity = 20;
+    //        break;
+    //    }
     index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, index.sub_indexes.back().count,
                                                   inserted_vector);
     ++index.sub_indexes.back().count;

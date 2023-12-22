@@ -6,13 +6,13 @@
 
 #include "dehnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &neighbors, const std::map<float, uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &neighbors, const std::vector<uint64_t> &query_result)
 {
     uint64_t hit = 0;
     auto query_result_iterator = query_result.begin();
     for (auto &neighbor : neighbors)
     {
-        if (neighbor == query_result_iterator->second)
+        if (neighbor == query_result_iterator.operator*())
         {
             ++hit;
             ++query_result_iterator;
@@ -85,21 +85,21 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 30;
+    uint64_t query_relaxed_monotonicity = 128;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 10, 10, 3, 10000000);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
         dehnsw::insert(index, train[i]);
         auto end = std::chrono::high_resolution_clock::now();
-        //        std::cout << "inserted ths " << i << "th vector, costs(us): "
-        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        std::cout << "inserted ths " << i << "th vector, costs(us): "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
     }
     std::cout << "building index consts(us): " << total_time << std::endl;
