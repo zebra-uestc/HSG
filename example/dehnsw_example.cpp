@@ -85,13 +85,13 @@ int main(int argc, char **argv)
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
-    uint64_t query_relaxed_monotonicity = 128;
+    uint64_t query_relaxed_monotonicity = 1;
     if (argc > 4)
     {
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 8, 128, 4, 10000000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
@@ -128,9 +128,8 @@ int main(int argc, char **argv)
         auto begin = std::chrono::high_resolution_clock::now();
         auto query_result = dehnsw::query<float>(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
-        //                std::cout << "one query costs(us): "
-        //                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
-        //                          std::endl;
+        //        std::cout << "one query costs(us): "
+        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         auto hit = verify(neighbors[i], query_result);
         total_hit += hit;
