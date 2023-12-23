@@ -119,25 +119,23 @@ int main(int argc, char **argv)
     }
     std::cout << "average time: " << total_time / test.size() << std::endl;
     std::cout << "total hit: " << total_hit << std::endl;
-    //    dehnsw::save(index, "./test_dehnsw_save");
-    //    auto index1 = dehnsw::load<float>("./test_dehnsw_save");
-    //    total_hit = 0;
-    //    total_time = 0;
-    //    for (auto i = 0; i < test.size(); ++i)
-    //    {
-    //        auto begin = std::chrono::high_resolution_clock::now();
-    //        auto query_result = dehnsw::query<float>(index1, test[i], neighbors[i].size(),
-    //        query_relaxed_monotonicity); auto end = std::chrono::high_resolution_clock::now();
-    //        //                std::cout << "one query costs(us): "
-    //        //                          << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count()
-    //        <<
-    //        //                          std::endl;
-    //        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-    //        auto hit = verify(neighbors[i], query_result);
-    //        total_hit += hit;
-    //        //        std::cout << "hit: " << hit << std::endl;
-    //    }
-    //    std::cout << "average time: " << total_time / test.size() << std::endl;
-    //    std::cout << "total hit: " << total_hit << std::endl;
+    dehnsw::save(index, "./test_dehnsw_save");
+    auto index1 = dehnsw::load<float>("./test_dehnsw_save");
+    total_hit = 0;
+    total_time = 0;
+    for (auto i = 0; i < test.size(); ++i)
+    {
+        auto begin = std::chrono::high_resolution_clock::now();
+        auto query_result = dehnsw::query<float>(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto end = std::chrono::high_resolution_clock::now();
+        //        std::cout << "one query costs(us): "
+        //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        auto hit = verify(neighbors[i], query_result);
+        total_hit += hit;
+        //        std::cout << "hit: " << hit << std::endl;
+    }
+    std::cout << "average time: " << total_time / test.size() << std::endl;
+    std::cout << "total hit: " << total_hit << std::endl;
     return 0;
 }
