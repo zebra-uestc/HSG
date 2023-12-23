@@ -37,15 +37,14 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
         sum = _mm512_add_ps(sum, _mm512_mul_ps(difference, difference));
     }
     _mm512_store_ps(temporary_result, sum);
-    float distance = 0;
-    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
-    {
-        distance += std::pow(vector1[i] - vector2[i], 2);
-    }
-    for (auto &result : temporary_result)
-    {
-        distance += result;
-    }
+    float distance = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3] +
+                     temporary_result[4] + temporary_result[5] + temporary_result[6] + temporary_result[7] +
+                     temporary_result[8] + temporary_result[9] + temporary_result[10] + temporary_result[11] +
+                     temporary_result[12] + temporary_result[13] + temporary_result[14] + temporary_result[15];
+    //    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
+    //    {
+    //        distance += std::pow(vector1[i] - vector2[i], 2);
+    //    }
     return distance;
 #elif defined(__AVX__)
     auto *vector1_pointer = (float *)vector1.data();
@@ -70,23 +69,24 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
         sum = _mm256_add_ps(sum, _mm256_mul_ps(difference, difference));
     }
     _mm256_store_ps(temporary_result, sum);
-    float distance = 0;
-    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
-    {
-        distance += std::pow(vector1[i] - vector2[i], 2);
-    }
-    for (auto &result : temporary_result)
-    {
-        distance += result;
-    }
+    float distance = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3] +
+                     temporary_result[4] + temporary_result[5] + temporary_result[6] + temporary_result[7];
+    //    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
+    //    {
+    //        distance += std::pow(vector1[i] - vector2[i], 2);
+    //    }
+    //    for (auto &result : temporary_result)
+    //    {
+    //        distance += result;
+    //    }
     return distance;
 #elif defined(__SSE__)
     auto *vector1_pointer = (float *)vector1.data();
     auto *vector2_pointer = (float *)vector2.data();
-    float __attribute__((aligned(32))) temporary_result[8];
+    float __attribute__((aligned(16))) temporary_result[4];
     const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
-    __m256 difference, part_vector1, part_vector2;
-    __m256 sum = _mm128_set1_ps(0);
+    __m128 difference, part_vector1, part_vector2;
+    __m128 sum = _mm128_set1_ps(0);
     while (vector1_pointer < end)
     {
         part_vector1 = _mm128_loadu_ps(vector1_pointer);
@@ -115,15 +115,15 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
         sum = _mm128_add_ps(sum, _mm128_mul_ps(difference, difference));
     }
     _mm128_store_ps(temporary_result, sum);
-    float distance = 0;
-    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
-    {
-        distance += std::pow(vector1[i] - vector2[i], 2);
-    }
-    for (auto &result : temporary_result)
-    {
-        distance += result;
-    }
+    float distance = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3];
+    //    for (auto i = (vector1.size() >> 4) << 4; i < vector1.size(); ++i)
+    //    {
+    //        distance += std::pow(vector1[i] - vector2[i], 2);
+    //    }
+    //    for (auto &result : temporary_result)
+    //    {
+    //        distance += result;
+    //    }
     return distance;
 #else
     float square_distance = 0;
