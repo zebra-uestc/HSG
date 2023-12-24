@@ -31,7 +31,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_subdirectory(example)
 
-    find_package(pybind11 REQUIRED)
-    pybind11_add_module(dehnswpy python_binding/dehnswpy.cpp)
+    #    g++ -std=c++20 -march=native -shared -DNDEBUG -Ofast -flto -fpic $(python3 -m pybind11 --includes) dehnswpy.cpp -o dehnswpy$(python3-config --extension-suffix)
 
 endif ()
