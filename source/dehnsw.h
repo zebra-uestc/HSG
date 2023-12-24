@@ -37,7 +37,7 @@ template <typename Dimension_Type> class Vector
     // 向量的原始数据
     std::vector<Dimension_Type> data;
     // 指向的邻居向量
-    std::vector<std::map<float, uint64_t>> out;
+    std::vector<std::multimap<float, uint64_t>> out;
     // 指向该向量的邻居向量
     std::vector<std::unordered_map<uint64_t, uint64_t>> edges;
 
@@ -182,19 +182,19 @@ bool insert_to_upper_layer(const Index<Dimension_Type> &index, const Sub_Index<D
 
 // 从开始向量查询距离目标向量最近的"最小连接数"个向量
 template <typename Dimension_Type>
-std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &index,
-                                                   const Sub_Index<Dimension_Type> &sub_index,
-                                                   const uint64_t layer_number,
-                                                   const std::vector<Dimension_Type> &query_vector,
-                                                   const uint64_t start)
+std::multimap<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &index,
+                                                        const Sub_Index<Dimension_Type> &sub_index,
+                                                        const uint64_t layer_number,
+                                                        const std::vector<Dimension_Type> &query_vector,
+                                                        const uint64_t start)
 {
     // 优先队列
-    auto nearest_neighbors = std::map<float, uint64_t>();
-    // 标记簇中的向量是否被遍历过
+    auto nearest_neighbors = std::multimap<float, uint64_t>();
+    // 标记向量是否被遍历过
     std::unordered_set<uint64_t> flags;
-    uint64_t out_of_bound = 0;
+    uint64_t out_of_bound = 1;
     // 排队队列
-    auto waiting_vectors = std::map<float, uint64_t>();
+    auto waiting_vectors = std::multimap<float, uint64_t>();
     waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[start].data), start);
     while (!waiting_vectors.empty())
     {
@@ -210,13 +210,13 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
         else
         {
             // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-            if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
+            if (processing_distance <= nearest_neighbors.rbegin()->first)
             {
-                out_of_bound = 0;
+                out_of_bound = 1;
                 nearest_neighbors.emplace(processing_distance, processing_vector_offset);
                 nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
             }
-            else if (index.parameters.relaxed_monotonicity < out_of_bound)
+            else if (index.parameters.relaxed_monotonicity == out_of_bound)
             {
                 break;
             }
@@ -241,18 +241,18 @@ std::map<float, uint64_t> nearest_neighbors_insert(const Index<Dimension_Type> &
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是除最后一层外其它层中的最近邻居，所以返回的结果为向量在子索引中的偏移量
 template <typename Dimension_Type>
-std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index,
-                                                  const Sub_Index<Dimension_Type> &sub_index,
-                                                  const std::vector<Dimension_Type> &query_vector, const uint64_t top_k,
-                                                  const uint64_t relaxed_monotonicity)
+std::multimap<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &index,
+                                                       const Sub_Index<Dimension_Type> &sub_index,
+                                                       const std::vector<Dimension_Type> &query_vector,
+                                                       const uint64_t top_k, const uint64_t relaxed_monotonicity)
 {
     // 优先队列
-    auto nearest_neighbors = std::map<float, uint64_t>();
+    auto nearest_neighbors = std::multimap<float, uint64_t>();
     // 标记簇中的向量是否被遍历过
     std::vector<bool> flags(sub_index.count, false);
     uint64_t out_of_bound = 1;
     // 排队队列
-    auto waiting_vectors = std::map<float, std::pair<uint64_t, uint64_t>>();
+    auto waiting_vectors = std::multimap<float, std::pair<uint64_t, uint64_t>>();
     waiting_vectors.emplace(
         index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
         std::make_pair(sub_index.layer_count, sub_index.vector_in_highest_layer));
@@ -271,7 +271,7 @@ std::map<float, uint64_t> nearest_neighbors_query(const Index<Dimension_Type> &i
         else
         {
             // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-            if (processing_distance < nearest_neighbors.rbegin()->first)
+            if (processing_distance <= nearest_neighbors.rbegin()->first)
             {
                 out_of_bound = 1;
                 nearest_neighbors.emplace(processing_distance,
@@ -384,7 +384,7 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
          uint64_t target_layer_number)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
-    auto every_layer_neighbors = std::stack<std::map<float, uint64_t>>();
+    auto every_layer_neighbors = std::stack<std::multimap<float, uint64_t>>();
     every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, sub_index.layer_count, new_vector.data,
                                                         sub_index.vector_in_highest_layer));
     // 逐层扫描
@@ -491,8 +491,9 @@ void add(Index<Dimension_Type> &index, Sub_Index<Dimension_Type> &sub_index, Vec
 
 // 查询
 template <typename Dimension_Type>
-std::vector<uint64_t> query(const Index<Dimension_Type> &index, const std::vector<Dimension_Type> &query_vector,
-                            uint64_t top_k, uint64_t relaxed_monotonicity = 0)
+std::multimap<float, uint64_t> query(const Index<Dimension_Type> &index,
+                                     const std::vector<Dimension_Type> &query_vector, uint64_t top_k,
+                                     uint64_t relaxed_monotonicity = 0)
 {
     //    if (index.vectors.empty())
     //    {
@@ -507,14 +508,7 @@ std::vector<uint64_t> query(const Index<Dimension_Type> &index, const std::vecto
     //    {
     //        relaxed_monotonicity = top_k;
     //    }
-    auto result = std::vector<uint64_t>();
-    result.reserve(top_k);
-    for (const auto &i :
-         nearest_neighbors_query(index, index.sub_indexes[0], query_vector, top_k, relaxed_monotonicity))
-    {
-        result.push_back(i.second);
-    }
-    return result;
+    return nearest_neighbors_query(index, index.sub_indexes[0], query_vector, top_k, relaxed_monotonicity);
 }
 
 // 带有子索引的查询
