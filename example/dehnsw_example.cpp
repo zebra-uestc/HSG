@@ -2,7 +2,6 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <random>
 #include <vector>
 
 #include "dehnsw.h"
