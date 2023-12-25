@@ -6,13 +6,13 @@
 
 #include "dehnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &neighbors, const std::vector<uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &neighbors, const std::multimap<float, uint64_t> &query_result)
 {
     uint64_t hit = 0;
     auto query_result_iterator = query_result.begin();
     for (auto &neighbor : neighbors)
     {
-        if (neighbor == query_result_iterator.operator*())
+        if (neighbor == query_result_iterator->second)
         {
             ++hit;
             ++query_result_iterator;
@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 8, 128, 4, 10000000);
+    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
