@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     for (auto i = 0; i < train.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        dehnsw::insert(index, train[i]);
+        dehnsw::insert(index, train[i].data());
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "inserted ths " << i << "th vector, costs(us): "
                   << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = dehnsw::query(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = dehnsw::query(index, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         //        std::cout << "one query costs(us): "
         //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = dehnsw::query(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = dehnsw::query(index1, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         //        std::cout << "one query costs(us): "
         //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
