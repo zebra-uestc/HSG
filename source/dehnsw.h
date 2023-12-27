@@ -247,12 +247,12 @@ std::multimap<float, uint64_t> nearest_neighbors_query(const Index &index, const
     waiting_vectors.emplace(
         index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
         sub_index.vector_in_highest_layer);
+    flags[sub_index.vector_in_highest_layer] = true;
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
         auto processing_vector_offset = waiting_vectors.begin()->second;
         waiting_vectors.erase(waiting_vectors.begin());
-        flags[processing_vector_offset] = true;
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < top_k)
         {
@@ -285,12 +285,16 @@ std::multimap<float, uint64_t> nearest_neighbors_query(const Index &index, const
                 if (!flags[vector.first])
                 {
                     flags[vector.first] = true;
-                    //                    if (top_k < waiting_vectors.size())
-                    //                    {
-                    //                        waiting_vectors.erase(std::prev(waiting_vectors.end()));
-                    //                    }
-                    waiting_vectors.emplace(
-                        index.distance_calculation(query_vector, sub_index.vectors[vector.first].data), vector.first);
+                    auto distance = index.distance_calculation(query_vector, sub_index.vectors[vector.first].data);
+                    if (waiting_vectors.size() < top_k)
+                    {
+                        waiting_vectors.emplace(distance, vector.first);
+                    }
+                    else if (distance < waiting_vectors.rbegin()->first)
+                    {
+                        waiting_vectors.erase(std::prev(waiting_vectors.end()));
+                        waiting_vectors.emplace(distance, vector.first);
+                    }
                 }
             }
         }
