@@ -17,13 +17,13 @@ enum class Distance_Type : uint64_t
 namespace euclidean2
 {
 
-float distance(const std::vector<float> &vector1, const std::vector<float> &vector2)
+float distance(const float *vector1, const float *vector2, uint64_t dimension)
 {
 #if defined(__AVX512F__)
-    auto *vector1_pointer = (float *)vector1.data();
-    auto *vector2_pointer = (float *)vector2.data();
+    auto *vector1_pointer = vector1;
+    auto *vector2_pointer = vector2;
     float __attribute__((aligned(64))) temporary_result[16];
-    const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
+    const float *end = vector1_pointer + ((dimension >> 4) << 4);
     __m512 difference, part_vevtor1, part_vevtor2;
     __m512 sum = _mm512_set1_ps(0);
     while (vector1_pointer < end)
@@ -46,10 +46,10 @@ float distance(const std::vector<float> &vector1, const std::vector<float> &vect
     //    }
     return distance;
 #elif defined(__AVX__)
-    auto *vector1_pointer = (float *)vector1.data();
-    auto *vector2_pointer = (float *)vector2.data();
+    auto *vector1_pointer = vector1;
+    auto *vector2_pointer = vector2;
     float __attribute__((aligned(32))) temporary_result[8];
-    const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
+    const float *end = vector1_pointer + ((dimension >> 4) << 4);
     __m256 difference, part_vector1, part_vector2;
     __m256 sum = _mm256_set1_ps(0);
     while (vector1_pointer < end)
@@ -80,10 +80,10 @@ float distance(const std::vector<float> &vector1, const std::vector<float> &vect
     //    }
     return distance;
 #elif defined(__SSE__)
-    auto *vector1_pointer = (float *)vector1.data();
-    auto *vector2_pointer = (float *)vector2.data();
+    auto *vector1_pointer = vector1;
+    auto *vector2_pointer = vector2;
     float __attribute__((aligned(16))) temporary_result[4];
-    const float *end = vector1_pointer + ((vector1.size() >> 4) << 4);
+    const float *end = vector1_pointer + ((dimension >> 4) << 4);
     __m128 difference, part_vector1, part_vector2;
     __m128 sum = _mm128_set1_ps(0);
     while (vector1_pointer < end)
@@ -177,10 +177,10 @@ auto get_distance_calculation_function(Distance_Type distance)
     {
     case Distance_Type::Euclidean2:
         return euclidean2::distance;
-    case Distance_Type::Inner_Product:
-        return inner_product::distance;
-    case Distance_Type::Cosine_Similarity:
-        return cosine_similarity::distance;
+        //    case Distance_Type::Inner_Product:
+        //        return inner_product::distance;
+        //    case Distance_Type::Cosine_Similarity:
+        //        return cosine_similarity::distance;
     default:
         throw std::logic_error("for now, we only support 'Euclidean2', 'Inner Product', 'Cosine Similarity'. ");
     }

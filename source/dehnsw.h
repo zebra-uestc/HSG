@@ -36,17 +36,22 @@ class Vector
     // 向量在整个数据集中的偏移量
     uint64_t global_offset{};
     // 向量的原始数据
-    std::vector<float> data;
+    const float *data;
     // 指向的邻居向量
     std::vector<std::multimap<float, uint64_t>> out;
     // 指向该向量的邻居向量
     std::vector<std::unordered_map<uint64_t, uint64_t>> edges;
 
-    explicit Vector(const uint64_t global_offset, const uint64_t offset, const std::vector<float> &data)
+    explicit Vector(const uint64_t global_offset, const uint64_t offset, const float *data)
         : layer(0), offset(offset), global_offset(global_offset), data(data)
     {
         this->out.emplace_back();
         this->edges.emplace_back();
+    }
+
+    ~Vector()
+    {
+        delete[] data;
     }
 };
 
@@ -105,7 +110,7 @@ class Index
     // 子索引
     std::vector<Sub_Index> sub_indexes;
     // 距离计算
-    float (*distance_calculation)(const std::vector<float> &vector1, const std::vector<float> &vector2);
+    float (*distance_calculation)(const float *vector1, const float *vector2, uint64_t dimension){};
 
     explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t minimum_connect_number,
                    const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound)
@@ -179,8 +184,8 @@ bool insert_to_upper_layer(const Index &index, const Sub_Index &sub_index, const
 
 // 从开始向量查询距离目标向量最近的"最小连接数"个向量
 std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, const Sub_Index &sub_index,
-                                                        const uint64_t layer_number,
-                                                        const std::vector<float> &query_vector, const uint64_t start)
+                                                        const uint64_t layer_number, const float *query_vector,
+                                                        const uint64_t start)
 {
     // 优先队列
     auto nearest_neighbors = std::multimap<float, uint64_t>();
@@ -189,7 +194,8 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
     uint64_t out_of_bound = 1;
     // 排队队列
     auto waiting_vectors = std::multimap<float, uint64_t>();
-    waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[start].data), start);
+    waiting_vectors.emplace(
+        index.distance_calculation(query_vector, sub_index.vectors[start].data, index.parameters.dimension), start);
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
@@ -224,7 +230,8 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
         {
             if (flags.insert(vector.first).second)
             {
-                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector.first].data),
+                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector.first].data,
+                                                                   index.parameters.dimension),
                                         vector.first);
             }
         }
@@ -235,8 +242,7 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是除最后一层外其它层中的最近邻居，所以返回的结果为向量在子索引中的偏移量
 std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const Index &index, const Sub_Index &sub_index,
-                                                                        const std::vector<float> &query_vector,
-                                                                        const uint64_t top_k,
+                                                                        const float *query_vector, const uint64_t top_k,
                                                                         const uint64_t relaxed_monotonicity)
 {
     // 优先队列
@@ -247,9 +253,10 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
     // 排队队列
     auto waiting_vectors =
         std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
-    waiting_vectors.emplace(
-        index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
-        sub_index.vector_in_highest_layer);
+    waiting_vectors.emplace(index.distance_calculation(query_vector,
+                                                       sub_index.vectors[sub_index.vector_in_highest_layer].data,
+                                                       index.parameters.dimension),
+                            sub_index.vector_in_highest_layer);
     flags[sub_index.vector_in_highest_layer] = true;
     while (!waiting_vectors.empty())
     {
@@ -288,8 +295,10 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
                 if (!flags[vector.first])
                 {
                     flags[vector.first] = true;
-                    waiting_vectors.emplace(
-                        index.distance_calculation(query_vector, sub_index.vectors[vector.first].data), vector.first);
+                    waiting_vectors.emplace(index.distance_calculation(query_vector,
+                                                                       sub_index.vectors[vector.first].data,
+                                                                       index.parameters.dimension),
+                                            vector.first);
                     //                    auto distance = index.distance_calculation(query_vector,
                     //                    sub_index.vectors[vector.first].data); if (nearest_neighbors.size() < top_k)
                     //                    {
@@ -315,9 +324,11 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
 
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是最后一层中的邻居，所以返回的结果为向量的全局偏移量
-std::map<float, uint64_t> nearest_neighbors_query_with_bound(
-    const Index &index, const Sub_Index &sub_index, const uint64_t layer_number, const std::vector<float> &query_vector,
-    const uint64_t start, const uint64_t top_k, const uint64_t relaxed_monotonicity, const float distance_bound)
+std::map<float, uint64_t> nearest_neighbors_query_with_bound(const Index &index, const Sub_Index &sub_index,
+                                                             const uint64_t layer_number, const float *query_vector,
+                                                             const uint64_t start, const uint64_t top_k,
+                                                             const uint64_t relaxed_monotonicity,
+                                                             const float distance_bound)
 {
     // 优先队列
     auto nearest_neighbors = std::map<float, uint64_t>();
@@ -326,7 +337,8 @@ std::map<float, uint64_t> nearest_neighbors_query_with_bound(
     uint64_t out_of_bound = 0;
     // 排队队列
     auto waiting_vectors = std::map<float, uint64_t>();
-    waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[start].data), start);
+    waiting_vectors.emplace(
+        index.distance_calculation(query_vector, sub_index.vectors[start].data, index.parameters.dimension), start);
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
@@ -377,7 +389,8 @@ std::map<float, uint64_t> nearest_neighbors_query_with_bound(
         {
             if (flags.insert(vector.first).second)
             {
-                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector.second].data),
+                waiting_vectors.emplace(index.distance_calculation(query_vector, sub_index.vectors[vector.second].data,
+                                                                   index.parameters.dimension),
                                         vector.first);
             }
         }
@@ -494,8 +507,8 @@ void add(Index &index, Sub_Index &sub_index, Vector &new_vector, uint64_t target
 }
 
 // 查询
-std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const std::vector<float> &query_vector,
-                                                      uint64_t top_k, uint64_t relaxed_monotonicity = 0)
+std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const float *query_vector, uint64_t top_k,
+                                                      uint64_t relaxed_monotonicity = 0)
 {
     //    if (index.vectors.empty())
     //    {
@@ -572,7 +585,7 @@ std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const 
 //}
 
 // 插入
-void insert(Index &index, const std::vector<float> &inserted_vector)
+void insert(Index &index, const float *inserted_vector)
 {
     // 如果插入向量的维度不等于索引里向量的维度
     //    if (inserted_vector.size() != index.vectors[0].data.size())
@@ -586,7 +599,9 @@ void insert(Index &index, const std::vector<float> &inserted_vector)
     if (inserted_vector_global_offset % index.parameters.sub_index_bound == 0)
     {
         index.sub_indexes.emplace_back(index.parameters.sub_index_bound);
-        index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, 0, inserted_vector);
+        auto temporary_pointer = new float[index.parameters.dimension];
+        memcpy(temporary_pointer, inserted_vector, sizeof(float) * index.parameters.dimension);
+        index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, 0, temporary_pointer);
         ++index.sub_indexes.back().count;
         return;
     }
@@ -637,8 +652,10 @@ void insert(Index &index, const std::vector<float> &inserted_vector)
     //        index.parameters.relaxed_monotonicity = 20;
     //        break;
     //    }
+    auto temporary_pointer = new float[index.parameters.dimension];
+    memcpy(temporary_pointer, inserted_vector, sizeof(float) * index.parameters.dimension);
     index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, index.sub_indexes.back().count,
-                                                  inserted_vector);
+                                                  temporary_pointer);
     ++index.sub_indexes.back().count;
     add(index, index.sub_indexes.back(), index.sub_indexes.back().vectors[index.sub_indexes.back().count - 1], 0);
 }
@@ -689,7 +706,7 @@ void save(const Index &index, const std::string_view &file_path)
             // 向量在数据集中的偏移量
             file.write((char *)&vector.global_offset, sizeof(uint64_t));
             // 向量的原始数据
-            file.write((char *)vector.data.data(), sizeof(float) * index.parameters.dimension);
+            file.write((char *)vector.data, sizeof(float) * index.parameters.dimension);
             for (auto layer_number = 0; layer_number <= vector.layer; ++layer_number)
             {
                 // 出度
@@ -777,10 +794,10 @@ Index load(const std::string_view &file_path)
             auto global_offset = uint64_t(0);
             file.read((char *)&global_offset, sizeof(uint64_t));
             // 向量的原始数据
-            auto data = std::vector<float>(index.parameters.dimension);
-            file.read((char *)data.data(), sizeof(float) * index.parameters.dimension);
+            auto data = new float[index.parameters.dimension];
+            file.read((char *)data, sizeof(float) * index.parameters.dimension);
             // 构建向量
-            index.sub_indexes.back().vectors.emplace_back(global_offset, offset, std::move(data));
+            index.sub_indexes.back().vectors.emplace_back(global_offset, offset, data);
             index.sub_indexes.back().vectors.back().layer = layer;
             for (auto layer_number = 0;; ++layer_number)
             {
