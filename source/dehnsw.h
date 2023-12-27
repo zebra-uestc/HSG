@@ -245,8 +245,8 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
     std::vector<bool> flags(sub_index.count, false);
     uint64_t out_of_bound = 1;
     // 排队队列
-    auto waiting_vectors = std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
-                                               std::greater_equal<>>();
+    auto waiting_vectors =
+        std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
     waiting_vectors.emplace(
         index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
         sub_index.vector_in_highest_layer);
@@ -264,7 +264,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
         else
         {
             // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-            if (processing_distance <= nearest_neighbors.top().first)
+            if (processing_distance < nearest_neighbors.top().first)
             {
                 out_of_bound = 1;
                 nearest_neighbors.pop();

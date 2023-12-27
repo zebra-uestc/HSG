@@ -8,23 +8,20 @@
 
 uint64_t verify(const std::vector<uint64_t> &neighbors, std::priority_queue<std::pair<float, uint64_t>> &query_result)
 {
-    uint64_t hit = 0;
-    for (auto i = neighbors.rbegin(); i != neighbors.rend(); ++i)
+    auto result = std::vector<uint64_t>(neighbors.size(), 0);
+    for (int i = result.size() - 1; i != -1; --i)
     {
-        if (i.operator*() == query_result.top().second)
+        result[i] = query_result.top().second;
+        query_result.pop();
+    }
+    uint64_t hit = 0;
+    for (auto &neighbor : neighbors)
+    {
+        if (neighbor == result[hit])
         {
             ++hit;
-            query_result.pop();
         }
     }
-    //    for (auto &neighbor : neighbors)
-    //    {
-    //        if (neighbor == query_result_iterator->second)
-    //        {
-    //            ++hit;
-    //            ++query_result_iterator;
-    //        }
-    //    }
     return hit;
 }
 
