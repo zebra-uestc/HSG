@@ -1,3 +1,5 @@
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -5,17 +7,21 @@
 #include "../source/distance.h"
 
 namespace py = pybind11;
+using namespace pybind11::literals; // needed to bring in _a literal
 
-std::vector<uint64_t> wrapped_query(const dehnsw::Index &index, const std::vector<float> &query_vector, uint64_t top_k,
+py::array_t<uint64_t> wrapped_query(const dehnsw::Index &index, const py::object &query_vector, uint64_t top_k,
                                     uint64_t relaxed_monotonicity = 0)
 {
-    auto result = std::vector<uint64_t>();
-    result.reserve(top_k);
-    for (const auto &i : dehnsw::query(index, query_vector, top_k, relaxed_monotonicity))
+    py::array_t<float, py::array::c_style | py::array::forcecast> items(query_vector);
+    auto return_result = py::array_t<uint64_t>(top_k);
+    auto return_buffer = (float *)return_result.request().ptr;
+    auto result = dehnsw::query(index, items.data(0), top_k, relaxed_monotonicity);
+    for (int i = top_k - 1; i >= 0; i--)
     {
-        result.push_back(i.second);
+        return_buffer[i] = result.top().second;
+        result.pop();
     }
-    return result;
+    return return_result;
 }
 
 PYBIND11_MODULE(dehnswpy, index)
