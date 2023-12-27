@@ -299,26 +299,10 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
                                                                        sub_index.vectors[vector.first].data,
                                                                        index.parameters.dimension),
                                             vector.first);
-                    //                    auto distance = index.distance_calculation(query_vector,
-                    //                    sub_index.vectors[vector.first].data); if (nearest_neighbors.size() < top_k)
-                    //                    {
-                    //                        waiting_vectors.emplace(distance, vector.first);
-                    //                    }
-                    //                    else if (distance < nearest_neighbors.top().first)
-                    //                    {
-                    //                        waiting_vectors.pop();
-                    //                        waiting_vectors.emplace(distance, vector.first);
                 }
             }
         }
     }
-    //    std::cout << nearest_neighbors.size() << std::endl;
-    //    std::cout << waiting_vectors.size() << std::endl;
-    //    while (!waiting_vectors.empty())
-    //    {
-    //        std::cout << waiting_vectors.top().first << "  " << waiting_vectors.top().second << std::endl;
-    //        waiting_vectors.pop();
-    //    }
     return nearest_neighbors;
 }
 
