@@ -91,7 +91,7 @@ int main(int argc, char **argv)
         query_relaxed_monotonicity = std::stoull(argv[4]);
     }
     std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    dehnsw::Index<float> index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
+    dehnsw::Index index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
     uint64_t total_time = 0;
     for (auto i = 0; i < train.size(); ++i)
     {
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = dehnsw::query<float>(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = dehnsw::query(index, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         //        std::cout << "one query costs(us): "
         //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
@@ -120,13 +120,13 @@ int main(int argc, char **argv)
     std::cout << "average time: " << total_time / test.size() << std::endl;
     std::cout << "total hit: " << total_hit << std::endl;
     dehnsw::save(index, "./test_dehnsw_save");
-    auto index1 = dehnsw::load<float>("./test_dehnsw_save");
+    auto index1 = dehnsw::load("./test_dehnsw_save");
     total_hit = 0;
     total_time = 0;
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = dehnsw::query<float>(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
+        auto query_result = dehnsw::query(index1, test[i], neighbors[i].size(), query_relaxed_monotonicity);
         auto end = std::chrono::high_resolution_clock::now();
         //        std::cout << "one query costs(us): "
         //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
