@@ -17,8 +17,7 @@ enum class Distance_Type : uint64_t
 namespace euclidean2
 {
 
-template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<float> &vector1, const std::vector<float> &vector2)
 {
 #if defined(__AVX512F__)
     auto *vector1_pointer = (float *)vector1.data();
@@ -141,8 +140,7 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
 namespace inner_product
 {
 
-template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<float> &vector1, const std::vector<float> &vector2)
 {
     float product = 0;
     for (size_t i = 0; i < vector1.size(); ++i)
@@ -157,8 +155,7 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
 namespace cosine_similarity
 {
 
-template <typename Dimension_Type>
-float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dimension_Type> &vector2)
+float distance(const std::vector<float> &vector1, const std::vector<float> &vector2)
 {
     float product = 0;
     float square_sum1 = 0;
@@ -174,16 +171,16 @@ float distance(const std::vector<Dimension_Type> &vector1, const std::vector<Dim
 
 } // namespace cosine_similarity
 
-template <typename Dimension_Type> auto get_distance_calculation_function(Distance_Type distance)
+auto get_distance_calculation_function(Distance_Type distance)
 {
     switch (distance)
     {
     case Distance_Type::Euclidean2:
-        return euclidean2::distance<Dimension_Type>;
+        return euclidean2::distance;
     case Distance_Type::Inner_Product:
-        return inner_product::distance<Dimension_Type>;
+        return inner_product::distance;
     case Distance_Type::Cosine_Similarity:
-        return cosine_similarity::distance<Dimension_Type>;
+        return cosine_similarity::distance;
     default:
         throw std::logic_error("for now, we only support 'Euclidean2', 'Inner Product', 'Cosine Similarity'. ");
     }
