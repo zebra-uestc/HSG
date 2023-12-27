@@ -6,18 +6,25 @@
 
 #include "dehnsw.h"
 
-uint64_t verify(const std::vector<uint64_t> &neighbors, const std::multimap<float, uint64_t> &query_result)
+uint64_t verify(const std::vector<uint64_t> &neighbors, std::priority_queue<std::pair<float, uint64_t>> &query_result)
 {
     uint64_t hit = 0;
-    auto query_result_iterator = query_result.begin();
-    for (auto &neighbor : neighbors)
+    for (auto i = neighbors.rbegin(); i != neighbors.rend(); ++i)
     {
-        if (neighbor == query_result_iterator->second)
+        if (i.operator*() == query_result.top().second)
         {
             ++hit;
-            ++query_result_iterator;
+            query_result.pop();
         }
     }
+    //    for (auto &neighbor : neighbors)
+    //    {
+    //        if (neighbor == query_result_iterator->second)
+    //        {
+    //            ++hit;
+    //            ++query_result_iterator;
+    //        }
+    //    }
     return hit;
 }
 

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cinttypes>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -233,26 +234,28 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
 
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是除最后一层外其它层中的最近邻居，所以返回的结果为向量在子索引中的偏移量
-std::multimap<float, uint64_t> nearest_neighbors_query(const Index &index, const Sub_Index &sub_index,
-                                                       const std::vector<float> &query_vector, const uint64_t top_k,
-                                                       const uint64_t relaxed_monotonicity)
+std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const Index &index, const Sub_Index &sub_index,
+                                                                        const std::vector<float> &query_vector,
+                                                                        const uint64_t top_k,
+                                                                        const uint64_t relaxed_monotonicity)
 {
     // 优先队列
-    auto nearest_neighbors = std::multimap<float, uint64_t>();
+    auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
     // 标记簇中的向量是否被遍历过
     std::vector<bool> flags(sub_index.count, false);
     uint64_t out_of_bound = 1;
     // 排队队列
-    auto waiting_vectors = std::multimap<float, uint64_t>();
+    auto waiting_vectors = std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
+                                               std::greater_equal<>>();
     waiting_vectors.emplace(
         index.distance_calculation(query_vector, sub_index.vectors[sub_index.vector_in_highest_layer].data),
         sub_index.vector_in_highest_layer);
     flags[sub_index.vector_in_highest_layer] = true;
     while (!waiting_vectors.empty())
     {
-        auto processing_distance = waiting_vectors.begin()->first;
-        auto processing_vector_offset = waiting_vectors.begin()->second;
-        waiting_vectors.erase(waiting_vectors.begin());
+        auto processing_distance = waiting_vectors.top().first;
+        auto processing_vector_offset = waiting_vectors.top().second;
+        waiting_vectors.pop();
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < top_k)
         {
@@ -261,12 +264,12 @@ std::multimap<float, uint64_t> nearest_neighbors_query(const Index &index, const
         else
         {
             // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-            if (processing_distance <= nearest_neighbors.rbegin()->first)
+            if (processing_distance <= nearest_neighbors.top().first)
             {
                 out_of_bound = 1;
+                nearest_neighbors.pop();
                 nearest_neighbors.emplace(processing_distance,
                                           sub_index.vectors[processing_vector_offset].global_offset);
-                nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
             }
             else if (relaxed_monotonicity == out_of_bound)
             {
@@ -285,20 +288,28 @@ std::multimap<float, uint64_t> nearest_neighbors_query(const Index &index, const
                 if (!flags[vector.first])
                 {
                     flags[vector.first] = true;
-                    auto distance = index.distance_calculation(query_vector, sub_index.vectors[vector.first].data);
-                    if (waiting_vectors.size() < top_k)
-                    {
-                        waiting_vectors.emplace(distance, vector.first);
-                    }
-                    else if (distance < waiting_vectors.rbegin()->first)
-                    {
-                        waiting_vectors.erase(std::prev(waiting_vectors.end()));
-                        waiting_vectors.emplace(distance, vector.first);
-                    }
+                    waiting_vectors.emplace(
+                        index.distance_calculation(query_vector, sub_index.vectors[vector.first].data), vector.first);
+                    //                    auto distance = index.distance_calculation(query_vector,
+                    //                    sub_index.vectors[vector.first].data); if (nearest_neighbors.size() < top_k)
+                    //                    {
+                    //                        waiting_vectors.emplace(distance, vector.first);
+                    //                    }
+                    //                    else if (distance < nearest_neighbors.top().first)
+                    //                    {
+                    //                        waiting_vectors.pop();
+                    //                        waiting_vectors.emplace(distance, vector.first);
                 }
             }
         }
     }
+    //    std::cout << nearest_neighbors.size() << std::endl;
+    //    std::cout << waiting_vectors.size() << std::endl;
+    //    while (!waiting_vectors.empty())
+    //    {
+    //        std::cout << waiting_vectors.top().first << "  " << waiting_vectors.top().second << std::endl;
+    //        waiting_vectors.pop();
+    //    }
     return nearest_neighbors;
 }
 
@@ -483,8 +494,8 @@ void add(Index &index, Sub_Index &sub_index, Vector &new_vector, uint64_t target
 }
 
 // 查询
-std::multimap<float, uint64_t> query(const Index &index, const std::vector<float> &query_vector, uint64_t top_k,
-                                     uint64_t relaxed_monotonicity = 0)
+std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const std::vector<float> &query_vector,
+                                                      uint64_t top_k, uint64_t relaxed_monotonicity = 0)
 {
     //    if (index.vectors.empty())
     //    {
