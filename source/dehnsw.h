@@ -255,6 +255,28 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
                                                        index.parameters.dimension),
                             sub_index.vector_in_highest_layer);
     flags[sub_index.vector_in_highest_layer] = true;
+    for (auto layer = sub_index.layer_count - 1; layer != 0; --layer)
+    {
+        while (true)
+        {
+            auto vector_offset = waiting_vectors.top().second;
+            for (auto &neighbor : sub_index.vectors[vector_offset].edges[layer])
+            {
+                if (!flags[neighbor.first])
+                {
+                    flags[neighbor.first] = true;
+                    waiting_vectors.emplace(index.distance_calculation(query_vector,
+                                                                       sub_index.vectors[neighbor.first].data.data(),
+                                                                       index.parameters.dimension),
+                                            neighbor.first);
+                }
+            }
+            if (vector_offset == waiting_vectors.top().second)
+            {
+                break;
+            }
+        }
+    }
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.top().first;
@@ -284,19 +306,16 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
                 ++out_of_bound;
             }
         }
-        for (auto &edge : sub_index.vectors[processing_vector_offset].edges)
+        for (auto &neighbor : sub_index.vectors[processing_vector_offset].edges[0])
         {
             // 计算当前向量的出边指向的向量和目标向量的距离
-            for (auto &vector : edge)
+            if (!flags[neighbor.first])
             {
-                if (!flags[vector.first])
-                {
-                    flags[vector.first] = true;
-                    waiting_vectors.emplace(index.distance_calculation(query_vector,
-                                                                       sub_index.vectors[vector.first].data.data(),
-                                                                       index.parameters.dimension),
-                                            vector.first);
-                }
+                flags[neighbor.first] = true;
+                waiting_vectors.emplace(index.distance_calculation(query_vector,
+                                                                   sub_index.vectors[neighbor.first].data.data(),
+                                                                   index.parameters.dimension),
+                                        neighbor.first);
             }
         }
     }

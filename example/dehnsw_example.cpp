@@ -144,87 +144,87 @@ int main(int argc, char **argv)
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
     auto reference_answer = get_reference_answer(train, test, neighbors);
-    performence_test(train, test, neighbors, reference_answer);
-    //    uint64_t query_relaxed_monotonicity = 1;
-    //    if (argc > 4)
-    //    {
-    //        query_relaxed_monotonicity = std::stoull(argv[4]);
-    //    }
-    //    std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
-    //    dehnsw::Index index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
-    //    {
-    //        uint64_t total_time = 0;
-    //        for (auto i = 0; i < train.size(); ++i)
-    //        {
-    //            auto begin = std::chrono::high_resolution_clock::now();
-    //            dehnsw::insert(index, train[i].data());
-    //            auto end = std::chrono::high_resolution_clock::now();
-    //            std::cout << "inserted ths " << i << "th vector, costs(us): "
-    //                      << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
-    //            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-    //        }
-    //        std::cout << "building index consts(us): " << total_time << std::endl;
-    //    }
-    //    {
-    //        uint64_t total_hit = 0;
-    //        uint64_t total_time = 0;
-    //        for (auto i = 0; i < test.size(); ++i)
-    //        {
-    //            auto begin = std::chrono::high_resolution_clock::now();
-    //            auto query_result = dehnsw::query(index, test[i].data(), neighbors[i].size(),
-    //            query_relaxed_monotonicity); auto end = std::chrono::high_resolution_clock::now();
-    //            //        std::cout << "one query costs(us): "
-    //            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
-    //            //                  std::endl;
-    //            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-    //            auto hit = verify(train, test[i], neighbors[i], query_result);
-    //            total_hit += hit;
-    //            //        std::cout << "hit: " << hit << std::endl;
-    //        }
-    //        std::cout << "average time: " << total_time / test.size() << std::endl;
-    //        std::cout << "total hit: " << total_hit << std::endl;
-    //    }
-    //    {
-    //        auto index_deep_copy = index;
-    //        uint64_t total_hit = 0;
-    //        uint64_t total_time = 0;
-    //        for (auto i = 0; i < test.size(); ++i)
-    //        {
-    //            auto begin = std::chrono::high_resolution_clock::now();
-    //            auto query_result =
-    //                dehnsw::query(index_deep_copy, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
-    //            auto end = std::chrono::high_resolution_clock::now();
-    //            //        std::cout << "one query costs(us): "
-    //            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
-    //            //                  std::endl;
-    //            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-    //            auto hit = verify(train, test[i], neighbors[i], query_result);
-    //            total_hit += hit;
-    //            //        std::cout << "hit: " << hit << std::endl;
-    //        }
-    //        std::cout << "average time: " << total_time / test.size() << std::endl;
-    //        std::cout << "total hit: " << total_hit << std::endl;
-    //    }
-    //    {
-    //        dehnsw::save(index, "./test_dehnsw_save");
-    //        auto index1 = dehnsw::load("./test_dehnsw_save");
-    //        uint64_t total_hit = 0;
-    //        uint64_t total_time = 0;
-    //        for (auto i = 0; i < test.size(); ++i)
-    //        {
-    //            auto begin = std::chrono::high_resolution_clock::now();
-    //            auto query_result = dehnsw::query(index1, test[i].data(), neighbors[i].size(),
-    //            query_relaxed_monotonicity); auto end = std::chrono::high_resolution_clock::now();
-    //            //        std::cout << "one query costs(us): "
-    //            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
-    //            //                  std::endl;
-    //            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-    //            auto hit = verify(train, test[i], neighbors[i], query_result);
-    //            total_hit += hit;
-    //            //        std::cout << "hit: " << hit << std::endl;
-    //        }
-    //        std::cout << "average time: " << total_time / test.size() << std::endl;
-    //        std::cout << "total hit: " << total_hit << std::endl;
-    //    }
+    //    performence_test(train, test, neighbors, reference_answer);
+    uint64_t query_relaxed_monotonicity = 1;
+    if (argc > 4)
+    {
+        query_relaxed_monotonicity = std::stoull(argv[4]);
+    }
+    std::cout << "query relaxed monotonicity: " << query_relaxed_monotonicity << std::endl;
+    dehnsw::Index index(Distance_Type::Euclidean2, train[0].size(), 4, 128, 4, 10000000);
+    {
+        uint64_t total_time = 0;
+        for (auto i = 0; i < train.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            dehnsw::insert(index, train[i].data());
+            auto end = std::chrono::high_resolution_clock::now();
+            std::cout << "inserted ths " << i << "th vector, costs(us): "
+                      << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        }
+        std::cout << "building index consts(us): " << total_time << std::endl;
+    }
+    {
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+        for (auto i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result = dehnsw::query(index, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
+            auto end = std::chrono::high_resolution_clock::now();
+            //        std::cout << "one query costs(us): "
+            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+            //                  std::endl;
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            auto hit = verify(reference_answer, i, query_result);
+            total_hit += hit;
+            //        std::cout << "hit: " << hit << std::endl;
+        }
+        std::cout << "average time: " << total_time / test.size() << std::endl;
+        std::cout << "total hit: " << total_hit << std::endl;
+    }
+    {
+        auto index_deep_copy = index;
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+        for (auto i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result =
+                dehnsw::query(index_deep_copy, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
+            auto end = std::chrono::high_resolution_clock::now();
+            //        std::cout << "one query costs(us): "
+            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+            //                  std::endl;
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            auto hit = verify(reference_answer, i, query_result);
+            total_hit += hit;
+            //        std::cout << "hit: " << hit << std::endl;
+        }
+        std::cout << "average time: " << total_time / test.size() << std::endl;
+        std::cout << "total hit: " << total_hit << std::endl;
+    }
+    {
+        dehnsw::save(index, "./test_dehnsw_save");
+        auto index1 = dehnsw::load("./test_dehnsw_save");
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+        for (auto i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result = dehnsw::query(index1, test[i].data(), neighbors[i].size(), query_relaxed_monotonicity);
+            auto end = std::chrono::high_resolution_clock::now();
+            //        std::cout << "one query costs(us): "
+            //                  << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() <<
+            //                  std::endl;
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            auto hit = verify(reference_answer, i, query_result);
+            total_hit += hit;
+            //        std::cout << "hit: " << hit << std::endl;
+        }
+        std::cout << "average time: " << total_time / test.size() << std::endl;
+        std::cout << "total hit: " << total_hit << std::endl;
+    }
     return 0;
 }
