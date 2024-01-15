@@ -1,4 +1,7 @@
-data
 .vscode
-*build*
+build
 .idea
+*.hdf5
+train
+test
+neighbors

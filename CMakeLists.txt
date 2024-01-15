@@ -31,6 +31,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     add_subdirectory(example)
 
-    #    g++ -std=c++20 -march=native -shared -DNDEBUG -Ofast -flto -fpic $(python3 -m pybind11 --includes) dehnswpy.cpp -o dehnswpy$(python3-config --extension-suffix)
+    #    g++ -std=c++20 -march=native -shared -DNDEBUG -O2 -flto -fpic $(python3 -m pybind11 --includes) dehnswpy.cpp -o dehnswpy$(python3-config --extension-suffix)
 
 endif ()
