@@ -25,25 +25,192 @@
 namespace dehnsw
 {
 
+// 压缩
+void compress(float *vector, uint64_t number, const float *result)
+{
+#if defined(__AVX512F__)
+    auto *part1_pointer = vector;
+    auto *part2_pointer = vector + number;
+    const float *end = part2_pointer;
+    auto *result_pointer = result;
+    float __attribute__((aligned(64))) temporary_result[16];
+    __m512 vevtor1, vevtor2, sum;
+    while (part1_pointer < end)
+    {
+        part_vevtor1 = _mm512_loadu_ps(part1_pointer);
+        part1_pointer += 16;
+        part_vevtor2 = _mm512_loadu_ps(part2_pointer);
+        part2_pointer += 16;
+        sum = _mm512_add_ps(vector1, vector2);
+        _mm512_store_ps(temporary_result, sum);
+        memcpy((void *)result_pointer, temporary_result, sizeof(float) * 16);
+        result_pointer += 16;
+    }
+#elif defined(__AVX__)
+    auto *part1_pointer = vector;
+    auto *part2_pointer = vector + number;
+    const float *end = part2_pointer;
+    auto *result_pointer = result;
+    float __attribute__((aligned(32))) temporary_result[8];
+    __m256 vector1, vector2, sum;
+    while (part1_pointer < end)
+    {
+        vector1 = _mm256_loadu_ps(part1_pointer);
+        part1_pointer += 8;
+        vector2 = _mm256_loadu_ps(part2_pointer);
+        part2_pointer += 8;
+        sum = _mm256_add_ps(vector1, vector2);
+        _mm256_store_ps(temporary_result, sum);
+        memcpy((void *)result_pointer, temporary_result, sizeof(float) * 8);
+        result_pointer += 8;
+    }
+#elif defined(__SSE__)
+    auto *part1_pointer = vector;
+    auto *part2_pointer = vector + number;
+    const float *end = part2_pointer;
+    auto *result_pointer = result;
+    float __attribute__((aligned(16))) temporary_result[4];
+    __m128 vector1, vector2, sum;
+    while (part1_pointer < end)
+    {
+        vector1 = _mm128_loadu_ps(part1_pointer);
+        part1_pointer += 4;
+        vector2 = _mm128_loadu_ps(part2_pointer);
+        part2_pointer += 4;
+        sum = _mm128_add_ps(vector1, vector2);
+        _mm128_store_ps(temporary_result, sum);
+        memcpy((void *)result_pointer, temporary_result, sizeof(float) * 4);
+        result_pointer += 4;
+    }
+#else
+    for (auto i = 0; i < number; ++i)
+    {
+        result[i] = vector[i] + vector[number + i];
+    }
+#endif
+}
+
+// 计算误差
+float calculate_error(float *vector, uint64_t length)
+{
+#if defined(__AVX512F__)
+    float *part1_pointer = vector;
+    float *part2_pointer = vector + length;
+    const float *end = part2_pointer;
+    float __attribute__((aligned(64))) temporary_result[16];
+    __m512 vevtor1, vevtor2;
+    __m512 sum = _mm512_set1_ps(0);
+    while (part1_pointer < end)
+    {
+        part_vevtor1 = _mm512_loadu_ps(part1_pointer);
+        part1_pointer += 16;
+        part_vevtor2 = _mm512_loadu_ps(part2_pointer);
+        part2_pointer += 16;
+        sum = _mm512_add_ps(sum, _mm512_mul_ps(vector1, vector2));
+    }
+    _mm512_store_ps(temporary_result, sum);
+    float error = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3] +
+                  temporary_result[4] + temporary_result[5] + temporary_result[6] + temporary_result[7] +
+                  temporary_result[8] + temporary_result[9] + temporary_result[10] + temporary_result[11] +
+                  temporary_result[12] + temporary_result[13] + temporary_result[14] + temporary_result[15];
+    return error;
+#elif defined(__AVX__)
+    float *part1_pointer = vector;
+    float *part2_pointer = vector + length;
+    const float *end = part2_pointer;
+    float __attribute__((aligned(32))) temporary_result[8];
+    __m256 vector1, vector2;
+    __m256 sum = _mm256_set1_ps(0);
+    while (part1_pointer < end)
+    {
+        vector1 = _mm256_loadu_ps(part1_pointer);
+        part1_pointer += 8;
+        vector2 = _mm256_loadu_ps(part2_pointer);
+        part2_pointer += 8;
+        sum = _mm256_add_ps(sum, _mm256_mul_ps(vector1, vector2));
+    }
+    _mm256_store_ps(temporary_result, sum);
+    float error = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3] +
+                  temporary_result[4] + temporary_result[5] + temporary_result[6] + temporary_result[7];
+    return error;
+#elif defined(__SSE__)
+    auto *part1_pointer = vector;
+    auto *part2_pointer = vector + length;
+    float __attribute__((aligned(16))) temporary_result[4];
+    const float *end = part1_pointer + length;
+    __m128 vector1, vector2;
+    __m128 sum = _mm128_set1_ps(0);
+    while (part1_pointer < end)
+    {
+        part_vector1 = _mm128_loadu_ps(part1_pointer);
+        part1_pointer += 4;
+        part_vector2 = _mm128_loadu_ps(part2_pointer);
+        part2_pointer += 4;
+        sum = _mm128_add_ps(sum, _mm128_mul_ps(vector1, vector2));
+    }
+    _mm128_store_ps(temporary_result, sum);
+    float error = temporary_result[0] + temporary_result[1] + temporary_result[2] + temporary_result[3];
+    return error;
+#else
+    float error = 0;
+    for (auto i = 0; i < length; ++i)
+    {
+        error += part1[i] * part2[i];
+    }
+    return error;
+#endif
+}
+
+// 系统信息
+class System_Information
+{
+  public:
+    uint64_t avx{};
+    uint64_t avx_float{};
+
+    System_Information()
+    {
+        // avx
+#if defined(__AVX512F__)
+        this->avx = 512;
+#elif defined(__AVX__)
+        this->avx = 256;
+#elif defined(__SSE__)
+        this->avx = 128;
+#else
+        this->avx = 0;
+#endif
+
+        //
+        this->avx_float = this->avx / (sizeof(float) * 8);
+    }
+} system_information;
+
 // 向量
 class Vector
 {
   public:
-    // 向量的最大层数
-    uint64_t layer{};
+    // 向量的外部id
+    uint64_t id{};
+    // 向量在整个索引中的偏移量
+    uint64_t global_offset{};
     // 向量在子索引中的偏移量
     uint64_t offset{};
-    // 向量在整个数据集中的偏移量
-    uint64_t global_offset{};
-    // 向量的原始数据
-    const std::vector<float> data;
+    // 向量的数据
+    std::vector<float> data;
+    // 向量压缩后的数据
+    std::vector<float> compressed_data;
+    // 误差
+    float error;
+    // 向量的最大层数
+    uint64_t layer{};
     // 指向的邻居向量
     std::vector<std::multimap<float, uint64_t>> out;
     // 指向该向量的邻居向量
     std::vector<std::unordered_map<uint64_t, uint64_t>> edges;
 
-    explicit Vector(const uint64_t global_offset, const uint64_t offset, const std::vector<float> &data)
-        : layer(0), offset(offset), global_offset(global_offset), data(data)
+    explicit Vector(const uint64_t id, const uint64_t global_offset, const uint64_t offset)
+        : id(id), global_offset(global_offset), offset(offset), error(0), layer(0)
     {
         this->out.emplace_back();
         this->edges.emplace_back();
@@ -98,21 +265,57 @@ class Index_Parameters
 class Index
 {
   public:
-    // 索引中向量的数量
-    uint64_t count{};
     // 索引的参数
     Index_Parameters parameters;
-    // 子索引
-    std::vector<Sub_Index> sub_indexes;
     // 距离计算
     float (*distance_calculation)(const float *vector1, const float *vector2, uint64_t dimension){};
+    // 索引中向量的数量
+    uint64_t count{};
+    // 子索引
+    std::vector<Sub_Index> sub_indexes;
+    //
+    uint64_t calculation_dimension;
+    //
+    uint64_t compressed_calculation_dimension;
+    //
+    uint64_t compressed_length;
 
     explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t minimum_connect_number,
                    const uint64_t relaxed_monotonicity, const uint64_t step, const uint64_t sub_index_bound)
-        : count(0),
-          parameters(step, dimension, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number)
+        : parameters(step, dimension, sub_index_bound, distance_type, relaxed_monotonicity, minimum_connect_number),
+          count(0), calculation_dimension(dimension), compressed_calculation_dimension(dimension), compressed_length(0)
     {
+        //
         this->distance_calculation = get_distance_calculation_function(distance_type);
+
+        //
+        if (system_information.avx != 0)
+        {
+            //
+            auto calculation_number = dimension / system_information.avx_float;
+            if (dimension % system_information.avx_float != 0)
+            {
+                ++calculation_number;
+            }
+            this->calculation_dimension = calculation_number * system_information.avx_float;
+            this->compressed_calculation_dimension = this->calculation_dimension;
+            if (calculation_number != 1)
+            {
+                if (calculation_number % 2 == 0)
+                {
+                    calculation_number /= 2;
+                    this->compressed_calculation_dimension = calculation_number * system_information.avx_float;
+                    this->compressed_length = this->compressed_calculation_dimension;
+                }
+                else
+                {
+                    calculation_number /= 2;
+                    this->compressed_calculation_dimension = calculation_number * system_information.avx_float;
+                    this->compressed_length = this->compressed_calculation_dimension;
+                    this->compressed_calculation_dimension += system_information.avx_float;
+                }
+            }
+        }
     }
 };
 
@@ -178,9 +381,9 @@ bool insert_to_upper_layer(const Index &index, const Sub_Index &sub_index, const
 }
 
 // 从开始向量查询距离目标向量最近的"最小连接数"个向量
-std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, const Sub_Index &sub_index,
-                                                        const uint64_t layer_number, const float *query_vector,
-                                                        const uint64_t start)
+std::multimap<float, uint64_t> nearest_neighbors_insert_compressed(const Index &index, const Sub_Index &sub_index,
+                                                                   const uint64_t layer, const Vector &inserted_vector,
+                                                                   const uint64_t start)
 {
     // 优先队列
     auto nearest_neighbors = std::multimap<float, uint64_t>();
@@ -189,9 +392,11 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
     uint64_t out_of_bound = 1;
     // 排队队列
     auto waiting_vectors = std::multimap<float, uint64_t>();
-    waiting_vectors.emplace(
-        index.distance_calculation(query_vector, sub_index.vectors[start].data.data(), index.parameters.dimension),
-        start);
+    waiting_vectors.emplace(index.distance_calculation(inserted_vector.compressed_data.data(),
+                                                       sub_index.vectors[start].compressed_data.data(),
+                                                       inserted_vector.compressed_data.size()) -
+                                sub_index.vectors[start].error,
+                            start);
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.begin()->first;
@@ -222,13 +427,74 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
             }
         }
         // 计算当前向量的出边指向的向量和目标向量的距离
-        for (auto &vector : sub_index.vectors[processing_vector_offset].edges[layer_number])
+        for (auto &vector : sub_index.vectors[processing_vector_offset].edges[layer])
         {
             if (flags.insert(vector.first).second)
             {
-                waiting_vectors.emplace(index.distance_calculation(query_vector,
+                waiting_vectors.emplace(
+                    index.distance_calculation(inserted_vector.compressed_data.data(),
+                                               sub_index.vectors[vector.first].compressed_data.data(),
+                                               inserted_vector.compressed_data.size()) -
+                        sub_index.vectors[vector.first].error,
+                    vector.first);
+            }
+        }
+    }
+    return nearest_neighbors;
+}
+
+// 从开始向量查询距离目标向量最近的"最小连接数"个向量
+std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, const Sub_Index &sub_index,
+                                                        const Vector &inserted_vector, const uint64_t start)
+{
+    // 优先队列
+    auto nearest_neighbors = std::multimap<float, uint64_t>();
+    // 标记向量是否被遍历过
+    std::unordered_set<uint64_t> flags;
+    uint64_t out_of_bound = 1;
+    // 排队队列
+    auto waiting_vectors = std::multimap<float, uint64_t>();
+    waiting_vectors.emplace(index.distance_calculation(inserted_vector.data.data(),
+                                                       sub_index.vectors[start].data.data(),
+                                                       inserted_vector.data.size()),
+                            start);
+    while (!waiting_vectors.empty())
+    {
+        auto processing_distance = waiting_vectors.begin()->first;
+        auto processing_vector_offset = waiting_vectors.begin()->second;
+        waiting_vectors.erase(waiting_vectors.begin());
+        flags.insert(processing_vector_offset);
+        // 如果已遍历的向量小于候选数量
+        if (nearest_neighbors.size() < index.parameters.minimum_connect_number)
+        {
+            nearest_neighbors.emplace(processing_distance, processing_vector_offset);
+        }
+        else
+        {
+            // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
+            if (processing_distance <= nearest_neighbors.rbegin()->first)
+            {
+                out_of_bound = 1;
+                nearest_neighbors.emplace(processing_distance, processing_vector_offset);
+                nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
+            }
+            else if (index.parameters.relaxed_monotonicity == out_of_bound)
+            {
+                break;
+            }
+            else
+            {
+                ++out_of_bound;
+            }
+        }
+        // 计算当前向量的出边指向的向量和目标向量的距离
+        for (auto &vector : sub_index.vectors[processing_vector_offset].edges[0])
+        {
+            if (flags.insert(vector.first).second)
+            {
+                waiting_vectors.emplace(index.distance_calculation(inserted_vector.data.data(),
                                                                    sub_index.vectors[vector.first].data.data(),
-                                                                   index.parameters.dimension),
+                                                                   inserted_vector.data.size()),
                                         vector.first);
             }
         }
@@ -236,12 +502,70 @@ std::multimap<float, uint64_t> nearest_neighbors_insert(const Index &index, cons
     return nearest_neighbors;
 }
 
+class Query_Vector
+{
+  public:
+    std::vector<float> data;
+    std::vector<float> compressed_data;
+
+    explicit Query_Vector(const Index &index, const float *data)
+    {
+        this->data = std::vector<float>(index.calculation_dimension, 0);
+        memcpy(this->data.data(), data, sizeof(float) * index.parameters.dimension);
+        this->compressed_data = std::vector<float>(index.compressed_calculation_dimension, 0);
+        compress(this->data.data(), index.compressed_length, this->compressed_data.data());
+        if (index.compressed_length != index.compressed_calculation_dimension)
+        {
+            memcpy(this->compressed_data.data() + index.compressed_length, data + 2 * index.compressed_length,
+                   sizeof(float) * system_information.avx_float);
+        }
+    }
+};
+
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是除最后一层外其它层中的最近邻居，所以返回的结果为向量在子索引中的偏移量
 std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const Index &index, const Sub_Index &sub_index,
-                                                                        const float *query_vector, const uint64_t top_k,
+                                                                        const Query_Vector &query_vector,
+                                                                        const uint64_t top_k,
                                                                         const uint64_t relaxed_monotonicity)
 {
+    auto up_layers_flags = std::vector<bool>(sub_index.count, false);
+    up_layers_flags[sub_index.vector_in_highest_layer] = true;
+    auto nearest_distance =
+        index.distance_calculation(query_vector.compressed_data.data(),
+                                   sub_index.vectors[sub_index.vector_in_highest_layer].compressed_data.data(),
+                                   index.compressed_calculation_dimension) -
+        sub_index.vectors[sub_index.vector_in_highest_layer].error;
+    auto nearest_neighbor = sub_index.vector_in_highest_layer;
+    auto new_neighbor = nearest_neighbor;
+    for (auto layer = sub_index.layer_count - 1; layer != 0; --layer)
+    {
+        while (true)
+        {
+            for (auto &neighbor : sub_index.vectors[nearest_neighbor].edges[layer])
+            {
+                if (!up_layers_flags[neighbor.first])
+                {
+                    up_layers_flags[neighbor.first] = true;
+                    auto temporary =
+                        index.distance_calculation(query_vector.compressed_data.data(),
+                                                   sub_index.vectors[neighbor.first].compressed_data.data(),
+                                                   index.compressed_calculation_dimension) -
+                        sub_index.vectors[neighbor.first].error;
+                    if (temporary < nearest_distance)
+                    {
+                        new_neighbor = neighbor.first;
+                        nearest_distance = temporary;
+                    }
+                }
+            }
+            if (new_neighbor == nearest_neighbor)
+            {
+                break;
+            }
+            nearest_neighbor = new_neighbor;
+        }
+    }
     // 优先队列
     auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
     // 标记簇中的向量是否被遍历过
@@ -250,33 +574,11 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
     // 排队队列
     auto waiting_vectors =
         std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
-    waiting_vectors.emplace(index.distance_calculation(query_vector,
-                                                       sub_index.vectors[sub_index.vector_in_highest_layer].data.data(),
-                                                       index.parameters.dimension),
-                            sub_index.vector_in_highest_layer);
-    flags[sub_index.vector_in_highest_layer] = true;
-    for (auto layer = sub_index.layer_count - 1; layer != 0; --layer)
-    {
-        while (true)
-        {
-            auto vector_offset = waiting_vectors.top().second;
-            for (auto &neighbor : sub_index.vectors[vector_offset].edges[layer])
-            {
-                if (!flags[neighbor.first])
-                {
-                    flags[neighbor.first] = true;
-                    waiting_vectors.emplace(index.distance_calculation(query_vector,
-                                                                       sub_index.vectors[neighbor.first].data.data(),
-                                                                       index.parameters.dimension),
-                                            neighbor.first);
-                }
-            }
-            if (vector_offset == waiting_vectors.top().second)
-            {
-                break;
-            }
-        }
-    }
+    waiting_vectors.emplace(index.distance_calculation(query_vector.data.data(),
+                                                       sub_index.vectors[nearest_neighbor].data.data(),
+                                                       index.calculation_dimension),
+                            nearest_neighbor);
+    flags[nearest_neighbor] = true;
     while (!waiting_vectors.empty())
     {
         auto processing_distance = waiting_vectors.top().first;
@@ -312,9 +614,9 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
             if (!flags[neighbor.first])
             {
                 flags[neighbor.first] = true;
-                waiting_vectors.emplace(index.distance_calculation(query_vector,
+                waiting_vectors.emplace(index.distance_calculation(query_vector.data.data(),
                                                                    sub_index.vectors[neighbor.first].data.data(),
-                                                                   index.parameters.dimension),
+                                                                   index.calculation_dimension),
                                         neighbor.first);
             }
         }
@@ -324,98 +626,106 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_query(const In
 
 // 从开始向量查询距离目标向量最近的top-k个向量
 // 该函数查询的是最后一层中的邻居，所以返回的结果为向量的全局偏移量
-std::map<float, uint64_t> nearest_neighbors_query_with_bound(const Index &index, const Sub_Index &sub_index,
-                                                             const uint64_t layer_number, const float *query_vector,
-                                                             const uint64_t start, const uint64_t top_k,
-                                                             const uint64_t relaxed_monotonicity,
-                                                             const float distance_bound)
-{
-    // 优先队列
-    auto nearest_neighbors = std::map<float, uint64_t>();
-    // 标记簇中的向量是否被遍历过
-    std::unordered_set<uint64_t> flags;
-    uint64_t out_of_bound = 0;
-    // 排队队列
-    auto waiting_vectors = std::map<float, uint64_t>();
-    waiting_vectors.emplace(
-        index.distance_calculation(query_vector, sub_index.vectors[start].data.data(), index.parameters.dimension),
-        start);
-    while (!waiting_vectors.empty())
-    {
-        auto processing_distance = waiting_vectors.begin()->first;
-        auto processing_vector_offset = waiting_vectors.begin()->second;
-        waiting_vectors.erase(waiting_vectors.begin());
-        flags.insert(processing_vector_offset);
-        if (processing_distance < distance_bound)
-        {
-            // 如果已遍历的向量小于候选数量
-            if (nearest_neighbors.size() < top_k)
-            {
-                nearest_neighbors.emplace(processing_distance,
-                                          sub_index.vectors[processing_vector_offset].global_offset);
-            }
-            else
-            {
-                // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-                if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
-                {
-                    out_of_bound = 0;
-                    nearest_neighbors.emplace(processing_distance,
-                                              sub_index.vectors[processing_vector_offset].global_offset);
-                    nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
-                }
-                else if (relaxed_monotonicity < out_of_bound)
-                {
-                    break;
-                }
-                else
-                {
-                    ++out_of_bound;
-                }
-            }
-        }
-        else
-        {
-            if (relaxed_monotonicity < out_of_bound)
-            {
-                break;
-            }
-            else
-            {
-                ++out_of_bound;
-            }
-        }
-        // 计算当前向量的出边指向的向量和目标向量的距离
-        for (auto &vector : sub_index.vectors[processing_vector_offset].edges[layer_number])
-        {
-            if (flags.insert(vector.first).second)
-            {
-                waiting_vectors.emplace(index.distance_calculation(query_vector,
-                                                                   sub_index.vectors[vector.second].data.data(),
-                                                                   index.parameters.dimension),
-                                        vector.first);
-            }
-        }
-    }
-    return nearest_neighbors;
-}
+// std::map<float, uint64_t> nearest_neighbors_query_with_bound(const Index &index, const Sub_Index &sub_index,
+//                                                             const uint64_t layer_number, const float
+//                                                             *query_vector, const uint64_t start, const uint64_t
+//                                                             top_k, const uint64_t relaxed_monotonicity, const
+//                                                             float distance_bound)
+//{
+//    // 优先队列
+//    auto nearest_neighbors = std::map<float, uint64_t>();
+//    // 标记簇中的向量是否被遍历过
+//    std::unordered_set<uint64_t> flags;
+//    uint64_t out_of_bound = 0;
+//    // 排队队列
+//    auto waiting_vectors = std::map<float, uint64_t>();
+//    waiting_vectors.emplace(
+//        index.distance_calculation(query_vector, sub_index.vectors[start].data.data(),
+//        index.parameters.dimension), start);
+//    while (!waiting_vectors.empty())
+//    {
+//        auto processing_distance = waiting_vectors.begin()->first;
+//        auto processing_vector_offset = waiting_vectors.begin()->second;
+//        waiting_vectors.erase(waiting_vectors.begin());
+//        flags.insert(processing_vector_offset);
+//        if (processing_distance < distance_bound)
+//        {
+//            // 如果已遍历的向量小于候选数量
+//            if (nearest_neighbors.size() < top_k)
+//            {
+//                nearest_neighbors.emplace(processing_distance,
+//                                          sub_index.vectors[processing_vector_offset].global_offset);
+//            }
+//            else
+//            {
+//                // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
+//                if (nearest_neighbors.upper_bound(processing_distance) != nearest_neighbors.end())
+//                {
+//                    out_of_bound = 0;
+//                    nearest_neighbors.emplace(processing_distance,
+//                                              sub_index.vectors[processing_vector_offset].global_offset);
+//                    nearest_neighbors.erase(std::prev(nearest_neighbors.end()));
+//                }
+//                else if (relaxed_monotonicity < out_of_bound)
+//                {
+//                    break;
+//                }
+//                else
+//                {
+//                    ++out_of_bound;
+//                }
+//            }
+//        }
+//        else
+//        {
+//            if (relaxed_monotonicity < out_of_bound)
+//            {
+//                break;
+//            }
+//            else
+//            {
+//                ++out_of_bound;
+//            }
+//        }
+//        // 计算当前向量的出边指向的向量和目标向量的距离
+//        for (auto &vector : sub_index.vectors[processing_vector_offset].edges[layer_number])
+//        {
+//            if (flags.insert(vector.first).second)
+//            {
+//                waiting_vectors.emplace(index.distance_calculation(query_vector,
+//                                                                   sub_index.vectors[vector.second].data.data(),
+//                                                                   index.parameters.dimension),
+//                                        vector.first);
+//            }
+//        }
+//    }
+//    return nearest_neighbors;
+//}
 
-void add(Index &index, Sub_Index &sub_index, Vector &new_vector, uint64_t target_layer_number)
+void add(Index &index, Sub_Index &sub_index, Vector &new_vector)
 {
     // 记录被插入向量每一层中距离最近的max_connect个邻居向量
     auto every_layer_neighbors = std::stack<std::multimap<float, uint64_t>>();
-    every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, sub_index.layer_count, new_vector.data.data(),
-                                                        sub_index.vector_in_highest_layer));
-    // 逐层扫描
-    // 因为Vector_InCluster中每个向量记录了自己在下层中对应的向量
-    // 所以不需要实际的层和簇
-    // 直接通过上一层中返回的结果即可进行计算
-    for (int64_t layer_number = sub_index.layer_count - 1; 0 <= layer_number; --layer_number)
+    if (sub_index.layer_count != 0)
     {
-        every_layer_neighbors.push(nearest_neighbors_insert(index, sub_index, layer_number, new_vector.data.data(),
-                                                            every_layer_neighbors.top().begin()->second));
+        every_layer_neighbors.push(nearest_neighbors_insert_compressed(index, sub_index, sub_index.layer_count,
+                                                                       new_vector, sub_index.vector_in_highest_layer));
+        // 逐层扫描
+        for (int64_t layer_number = sub_index.layer_count - 1; 0 < layer_number; --layer_number)
+        {
+            every_layer_neighbors.push(nearest_neighbors_insert_compressed(
+                index, sub_index, layer_number, new_vector, every_layer_neighbors.top().begin()->second));
+        }
+        every_layer_neighbors.push(
+            nearest_neighbors_insert(index, sub_index, new_vector, every_layer_neighbors.top().begin()->second));
+    }
+    else
+    {
+        every_layer_neighbors.push(
+            nearest_neighbors_insert(index, sub_index, new_vector, sub_index.vector_in_highest_layer));
     }
     // 插入向量
+    uint64_t target_layer_number = 0;
     while (!every_layer_neighbors.empty())
     {
         auto deleted_edges = std::unordered_map<uint64_t, std::pair<float, uint64_t>>();
@@ -525,7 +835,8 @@ std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const 
     //    {
     //        relaxed_monotonicity = top_k;
     //    }
-    return nearest_neighbors_query(index, index.sub_indexes[0], query_vector, top_k, relaxed_monotonicity);
+    return nearest_neighbors_query(index, index.sub_indexes[0], Query_Vector{index, query_vector}, top_k,
+                                   relaxed_monotonicity);
 }
 
 // 带有子索引的查询
@@ -586,8 +897,22 @@ std::priority_queue<std::pair<float, uint64_t>> query(const Index &index, const 
 //    return result;
 //}
 
+void compress_vector(const Index &index, Vector &vector, const float *data)
+{
+    vector.data.resize(index.calculation_dimension, 0);
+    memcpy(vector.data.data(), data, sizeof(float) * index.parameters.dimension);
+    vector.compressed_data = std::vector<float>(index.compressed_calculation_dimension, 0);
+    compress(vector.data.data(), index.compressed_length, vector.compressed_data.data());
+    if (index.compressed_length != index.compressed_calculation_dimension)
+    {
+        memcpy(vector.compressed_data.data() + index.compressed_length, data + 2 * index.compressed_length,
+               sizeof(float) * system_information.avx_float);
+    }
+    vector.error = calculate_error(vector.data.data(), index.compressed_length);
+}
+
 // 插入
-void insert(Index &index, const float *inserted_vector)
+void insert(Index &index, const uint64_t id, const float *inserted_vector)
 {
     // 如果插入向量的维度不等于索引里向量的维度
     //    if (inserted_vector.size() != index.vectors[0].data.size())
@@ -601,10 +926,11 @@ void insert(Index &index, const float *inserted_vector)
     if (inserted_vector_global_offset % index.parameters.sub_index_bound == 0)
     {
         index.sub_indexes.emplace_back(index.parameters.sub_index_bound);
-        auto temporary_vector = std::vector<float>(index.parameters.dimension, 0);
-        memcpy(temporary_vector.data(), inserted_vector, sizeof(float) * index.parameters.dimension);
-        index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, 0, std::move(temporary_vector));
+
+        index.sub_indexes.back().vectors.emplace_back(id, inserted_vector_global_offset,
+                                                      index.sub_indexes.back().count);
         ++index.sub_indexes.back().count;
+        compress_vector(index, index.sub_indexes.back().vectors.back(), inserted_vector);
         return;
     }
     //    switch (index.sub_indexes.back().count)
@@ -654,193 +980,192 @@ void insert(Index &index, const float *inserted_vector)
     //        index.parameters.relaxed_monotonicity = 20;
     //        break;
     //    }
-    auto temporary_vector = std::vector<float>(index.parameters.dimension, 0);
-    memcpy(temporary_vector.data(), inserted_vector, sizeof(float) * index.parameters.dimension);
-    index.sub_indexes.back().vectors.emplace_back(inserted_vector_global_offset, index.sub_indexes.back().count,
-                                                  std::move(temporary_vector));
+    index.sub_indexes.back().vectors.emplace_back(id, inserted_vector_global_offset, index.sub_indexes.back().count);
     ++index.sub_indexes.back().count;
-    add(index, index.sub_indexes.back(), index.sub_indexes.back().vectors[index.sub_indexes.back().count - 1], 0);
+    compress_vector(index, index.sub_indexes.back().vectors.back(), inserted_vector);
+    add(index, index.sub_indexes.back(), index.sub_indexes.back().vectors.back());
 }
 
 // 保存索引
-void save(const Index &index, const std::string_view &file_path)
-{
-    std::ofstream file;
-    file.open(file_path.data(), std::ios::out & std::ios::binary);
-    if (!file.is_open())
-    {
-        throw std::invalid_argument("open file failed.");
-    }
-    // 索引中的向量的数量
-    file.write((char *)&index.count, sizeof(uint64_t));
-    // 索引中的参数
-    // 步长
-    file.write((char *)&index.parameters.step, sizeof(uint64_t));
-    // 维度
-    file.write((char *)&index.parameters.dimension, sizeof(uint64_t));
-    // 子索引限制
-    file.write((char *)&index.parameters.sub_index_bound, sizeof(uint64_t));
-    // 距离限制
-    file.write((char *)&index.parameters.distance_type, sizeof(Distance_Type));
-    // 插入时提前终止条件
-    file.write((char *)&index.parameters.relaxed_monotonicity, sizeof(uint64_t));
-    // 每个向量的最小连接数量
-    file.write((char *)&index.parameters.minimum_connect_number, sizeof(uint64_t));
-    // 子索引的数量
-    uint64_t sub_indexes_size = index.sub_indexes.size();
-    file.write((char *)&sub_indexes_size, sizeof(uint64_t));
-    // 保存子索引
-    for (const auto &sub_index : index.sub_indexes)
-    {
-        // 子索引中的向量的数量
-        file.write((char *)&sub_index.count, sizeof(uint64_t));
-        // 子索引最大层数
-        file.write((char *)&sub_index.layer_count, sizeof(uint64_t));
-        // 子索引中最高层中的向量的偏移量
-        file.write((char *)&sub_index.vector_in_highest_layer, sizeof(uint64_t));
-        // 保存子索引中的向量
-        for (const auto &vector : sub_index.vectors)
-        {
-            // 向量的最大层数
-            file.write((char *)&vector.layer, sizeof(uint64_t));
-            // 向量在子索引中的偏移量
-            file.write((char *)&vector.offset, sizeof(uint64_t));
-            // 向量在数据集中的偏移量
-            file.write((char *)&vector.global_offset, sizeof(uint64_t));
-            // 向量的原始数据
-            file.write((char *)vector.data.data(), sizeof(float) * index.parameters.dimension);
-            for (auto layer_number = 0; layer_number <= vector.layer; ++layer_number)
-            {
-                // 出度
-                uint64_t out_degree = vector.out[layer_number].size();
-                file.write((char *)&out_degree, sizeof(uint64_t));
-                // 出边
-                for (const auto &out : vector.out[layer_number])
-                {
-                    file.write((char *)&out.first, sizeof(float));
-                    file.write((char *)&out.second, sizeof(uint64_t));
-                }
-                // 入度
-                uint64_t degree = vector.edges[layer_number].size();
-                file.write((char *)&degree, sizeof(uint64_t));
-                // 入边
-                for (const auto &edge : vector.edges[layer_number])
-                {
-                    file.write((char *)&edge.first, sizeof(uint64_t));
-                    file.write((char *)&edge.second, sizeof(uint64_t));
-                }
-            }
-        }
-    }
-    file.close();
-}
+// void save(const Index &index, const std::string_view &file_path)
+// {
+//     std::ofstream file;
+//     file.open(file_path.data(), std::ios::out & std::ios::binary);
+//     if (!file.is_open())
+//     {
+//         throw std::invalid_argument("open file failed.");
+//     }
+//     // 索引中的向量的数量
+//     file.write((char *)&index.count, sizeof(uint64_t));
+//     // 索引中的参数
+//     // 步长
+//     file.write((char *)&index.parameters.step, sizeof(uint64_t));
+//     // 维度
+//     file.write((char *)&index.parameters.dimension, sizeof(uint64_t));
+//     // 子索引限制
+//     file.write((char *)&index.parameters.sub_index_bound, sizeof(uint64_t));
+//     // 距离限制
+//     file.write((char *)&index.parameters.distance_type, sizeof(Distance_Type));
+//     // 插入时提前终止条件
+//     file.write((char *)&index.parameters.relaxed_monotonicity, sizeof(uint64_t));
+//     // 每个向量的最小连接数量
+//     file.write((char *)&index.parameters.minimum_connect_number, sizeof(uint64_t));
+//     // 子索引的数量
+//     uint64_t sub_indexes_size = index.sub_indexes.size();
+//     file.write((char *)&sub_indexes_size, sizeof(uint64_t));
+//     // 保存子索引
+//     for (const auto &sub_index : index.sub_indexes)
+//     {
+//         // 子索引中的向量的数量
+//         file.write((char *)&sub_index.count, sizeof(uint64_t));
+//         // 子索引最大层数
+//         file.write((char *)&sub_index.layer_count, sizeof(uint64_t));
+//         // 子索引中最高层中的向量的偏移量
+//         file.write((char *)&sub_index.vector_in_highest_layer, sizeof(uint64_t));
+//         // 保存子索引中的向量
+//         for (const auto &vector : sub_index.vectors)
+//         {
+//             // 向量的最大层数
+//             file.write((char *)&vector.layer, sizeof(uint64_t));
+//             // 向量在子索引中的偏移量
+//             file.write((char *)&vector.offset, sizeof(uint64_t));
+//             // 向量在数据集中的偏移量
+//             file.write((char *)&vector.global_offset, sizeof(uint64_t));
+//             // 向量的原始数据
+//             file.write((char *)vector.data.data(), sizeof(float) * index.parameters.dimension);
+//             for (auto layer_number = 0; layer_number <= vector.layer; ++layer_number)
+//             {
+//                 // 出度
+//                 uint64_t out_degree = vector.out[layer_number].size();
+//                 file.write((char *)&out_degree, sizeof(uint64_t));
+//                 // 出边
+//                 for (const auto &out : vector.out[layer_number])
+//                 {
+//                     file.write((char *)&out.first, sizeof(float));
+//                     file.write((char *)&out.second, sizeof(uint64_t));
+//                 }
+//                 // 入度
+//                 uint64_t degree = vector.edges[layer_number].size();
+//                 file.write((char *)&degree, sizeof(uint64_t));
+//                 // 入边
+//                 for (const auto &edge : vector.edges[layer_number])
+//                 {
+//                     file.write((char *)&edge.first, sizeof(uint64_t));
+//                     file.write((char *)&edge.second, sizeof(uint64_t));
+//                 }
+//             }
+//         }
+//     }
+//     file.close();
+// }
 
-// 读取索引
-Index load(const std::string_view &file_path)
-{
-    std::ifstream file;
-    file.open(file_path.data(), std::ios::in & std::ios::binary);
-    if (!file.is_open())
-    {
-        throw std::invalid_argument("open file failed.");
-    }
-    // 索引中向量的数量
-    auto count = uint64_t(0);
-    file.read((char *)&count, sizeof(uint64_t));
-    // 索引的参数
-    // 步长
-    auto step = uint64_t(0);
-    file.read((char *)&step, sizeof(uint64_t));
-    // 维度
-    auto dimension = uint64_t(0);
-    file.read((char *)&dimension, sizeof(uint64_t));
-    // 子索引限制
-    auto sub_index_bound = uint64_t(0);
-    file.read((char *)&sub_index_bound, sizeof(uint64_t));
-    // 距离限制
-    auto distance_type = Distance_Type::Cosine_Similarity;
-    file.read((char *)&distance_type, sizeof(Distance_Type));
-    // 插入时提前终止条件
-    auto relaxed_monotonicity = uint64_t(0);
-    file.read((char *)&relaxed_monotonicity, sizeof(uint64_t));
-    // 每个向量的最小连接数量
-    auto minimum_connect_number = uint64_t(0);
-    file.read((char *)&minimum_connect_number, sizeof(uint64_t));
-    // 构建索引
-    auto index = Index(distance_type, dimension, minimum_connect_number, relaxed_monotonicity, step, sub_index_bound);
-    index.count = count;
-    // 子的索引数量
-    auto sub_indexes_size = uint64_t(0);
-    file.read((char *)&sub_indexes_size, sizeof(uint64_t));
-    // 读取子索引
-    for (auto sub_index_number = 0; sub_index_number < sub_indexes_size; ++sub_index_number)
-    {
-        // 构建一个子索引
-        index.sub_indexes.emplace_back(index.parameters.sub_index_bound);
-        // 子索引中的向量的数量
-        file.read((char *)&index.sub_indexes.back().count, sizeof(uint64_t));
-        // 子索引最大层数
-        file.read((char *)&index.sub_indexes.back().layer_count, sizeof(uint64_t));
-        // 子索引中最高层中的向量的偏移量
-        file.read((char *)&index.sub_indexes.back().vector_in_highest_layer, sizeof(uint64_t));
-        // 读取子索引中的向量
-        for (auto vector_offset = 0; vector_offset < index.sub_indexes.back().count; ++vector_offset)
-        {
-            // 向量的最大层数
-            auto layer = uint64_t(0);
-            file.read((char *)&layer, sizeof(uint64_t));
-            // 向量在子索引中的偏移量
-            auto offset = uint64_t(0);
-            file.read((char *)&offset, sizeof(uint64_t));
-            // 向量在数据集中的偏移量
-            auto global_offset = uint64_t(0);
-            file.read((char *)&global_offset, sizeof(uint64_t));
-            // 向量的原始数据
-            auto temporary_vector = std::vector<float>(dimension, 0);
-            file.read((char *)temporary_vector.data(), sizeof(float) * index.parameters.dimension);
-            // 构建向量
-            index.sub_indexes.back().vectors.emplace_back(global_offset, offset, std::move(temporary_vector));
-            index.sub_indexes.back().vectors.back().layer = layer;
-            for (auto layer_number = 0;; ++layer_number)
-            {
-                // 出度
-                auto out_degree = uint64_t(0);
-                file.read((char *)&out_degree, sizeof(uint64_t));
-                // 出边
-                for (auto out_number = 0; out_number < out_degree; ++out_number)
-                {
-                    auto distance = float(0);
-                    auto neighbor_offset = uint64_t(0);
-                    file.read((char *)&distance, sizeof(float));
-                    file.read((char *)&neighbor_offset, sizeof(uint64_t));
-                    index.sub_indexes.back().vectors.back().out.back().emplace(distance, neighbor_offset);
-                }
-                // 入度
-                auto degree = uint64_t(0);
-                file.read((char *)&degree, sizeof(uint64_t));
-                // 入边
-                for (auto number = 0; number < degree; ++number)
-                {
-                    auto neighbor_offset = uint64_t(0);
-                    file.read((char *)&neighbor_offset, sizeof(uint64_t));
-                    auto edge_number = uint64_t(0);
-                    file.read((char *)&edge_number, sizeof(uint64_t));
-                    index.sub_indexes.back().vectors.back().edges.back().emplace(neighbor_offset, edge_number);
-                }
-                if (layer_number == index.sub_indexes.back().vectors.back().layer)
-                {
-                    break;
-                }
-                else
-                {
-                    index.sub_indexes.back().vectors.back().out.emplace_back();
-                    index.sub_indexes.back().vectors.back().edges.emplace_back();
-                }
-            }
-        }
-    }
-    file.close();
-    return index;
-}
+// // 读取索引
+// Index load(const std::string_view &file_path)
+// {
+//     std::ifstream file;
+//     file.open(file_path.data(), std::ios::in & std::ios::binary);
+//     if (!file.is_open())
+//     {
+//         throw std::invalid_argument("open file failed.");
+//     }
+//     // 索引中向量的数量
+//     auto count = uint64_t(0);
+//     file.read((char *)&count, sizeof(uint64_t));
+//     // 索引的参数
+//     // 步长
+//     auto step = uint64_t(0);
+//     file.read((char *)&step, sizeof(uint64_t));
+//     // 维度
+//     auto dimension = uint64_t(0);
+//     file.read((char *)&dimension, sizeof(uint64_t));
+//     // 子索引限制
+//     auto sub_index_bound = uint64_t(0);
+//     file.read((char *)&sub_index_bound, sizeof(uint64_t));
+//     // 距离限制
+//     auto distance_type = Distance_Type::Cosine_Similarity;
+//     file.read((char *)&distance_type, sizeof(Distance_Type));
+//     // 插入时提前终止条件
+//     auto relaxed_monotonicity = uint64_t(0);
+//     file.read((char *)&relaxed_monotonicity, sizeof(uint64_t));
+//     // 每个向量的最小连接数量
+//     auto minimum_connect_number = uint64_t(0);
+//     file.read((char *)&minimum_connect_number, sizeof(uint64_t));
+//     // 构建索引
+//     auto index = Index(distance_type, dimension, minimum_connect_number, relaxed_monotonicity, step,
+//     sub_index_bound); index.count = count;
+//     // 子的索引数量
+//     auto sub_indexes_size = uint64_t(0);
+//     file.read((char *)&sub_indexes_size, sizeof(uint64_t));
+//     // 读取子索引
+//     for (auto sub_index_number = 0; sub_index_number < sub_indexes_size; ++sub_index_number)
+//     {
+//         // 构建一个子索引
+//         index.sub_indexes.emplace_back(index.parameters.sub_index_bound);
+//         // 子索引中的向量的数量
+//         file.read((char *)&index.sub_indexes.back().count, sizeof(uint64_t));
+//         // 子索引最大层数
+//         file.read((char *)&index.sub_indexes.back().layer_count, sizeof(uint64_t));
+//         // 子索引中最高层中的向量的偏移量
+//         file.read((char *)&index.sub_indexes.back().vector_in_highest_layer, sizeof(uint64_t));
+//         // 读取子索引中的向量
+//         for (auto vector_offset = 0; vector_offset < index.sub_indexes.back().count; ++vector_offset)
+//         {
+//             // 向量的最大层数
+//             auto layer = uint64_t(0);
+//             file.read((char *)&layer, sizeof(uint64_t));
+//             // 向量在子索引中的偏移量
+//             auto offset = uint64_t(0);
+//             file.read((char *)&offset, sizeof(uint64_t));
+//             // 向量在数据集中的偏移量
+//             auto global_offset = uint64_t(0);
+//             file.read((char *)&global_offset, sizeof(uint64_t));
+//             // 向量的原始数据
+//             auto temporary_vector = std::vector<float>(dimension, 0);
+//             file.read((char *)temporary_vector.data(), sizeof(float) * index.parameters.dimension);
+//             // 构建向量
+//             index.sub_indexes.back().vectors.emplace_back(global_offset, offset,
+//             std::move(temporary_vector)); index.sub_indexes.back().vectors.back().layer = layer; for (auto
+//             layer_number = 0;; ++layer_number)
+//             {
+//                 // 出度
+//                 auto out_degree = uint64_t(0);
+//                 file.read((char *)&out_degree, sizeof(uint64_t));
+//                 // 出边
+//                 for (auto out_number = 0; out_number < out_degree; ++out_number)
+//                 {
+//                     auto distance = float(0);
+//                     auto neighbor_offset = uint64_t(0);
+//                     file.read((char *)&distance, sizeof(float));
+//                     file.read((char *)&neighbor_offset, sizeof(uint64_t));
+//                     index.sub_indexes.back().vectors.back().out.back().emplace(distance, neighbor_offset);
+//                 }
+//                 // 入度
+//                 auto degree = uint64_t(0);
+//                 file.read((char *)&degree, sizeof(uint64_t));
+//                 // 入边
+//                 for (auto number = 0; number < degree; ++number)
+//                 {
+//                     auto neighbor_offset = uint64_t(0);
+//                     file.read((char *)&neighbor_offset, sizeof(uint64_t));
+//                     auto edge_number = uint64_t(0);
+//                     file.read((char *)&edge_number, sizeof(uint64_t));
+//                     index.sub_indexes.back().vectors.back().edges.back().emplace(neighbor_offset,
+//                     edge_number);
+//                 }
+//                 if (layer_number == index.sub_indexes.back().vectors.back().layer)
+//                 {
+//                     break;
+//                 }
+//                 else
+//                 {
+//                     index.sub_indexes.back().vectors.back().out.emplace_back();
+//                     index.sub_indexes.back().vectors.back().edges.emplace_back();
+//                 }
+//             }
+//         }
+//     }
+//     file.close();
+//     return index;
+// }
 
 } // namespace dehnsw
