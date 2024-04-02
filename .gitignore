@@ -6,3 +6,6 @@ train
 test
 neighbors
 *.so
+.cache
+binary
+performence_test_result.txt
