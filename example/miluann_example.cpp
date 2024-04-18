@@ -3,8 +3,11 @@
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <semaphore>
+#include <thread>
 #include <vector>
 
+#include "../../hnswlib/hnswlib/hnswlib.h"
 #include "distance.h"
 #include "miluann.h"
 
@@ -94,46 +97,131 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
     return neighbors;
 }
 
-void performence_test(const std::vector<std::vector<float>> &train, const std::vector<std::vector<float>> &test,
-                      const std::vector<std::vector<uint64_t>> &neighbors,
-                      const std::vector<std::vector<float>> &reference_answer)
+auto available_thread = std::counting_semaphore<>(std::thread::hardware_concurrency() - 2);
+auto done_semaphore = std::counting_semaphore<>(1);
+uint64_t done_thread = 0;
+uint64_t done_number = 0;
+auto done = std::counting_semaphore<>(0);
+
+void test_hnsw(const std::vector<std::vector<float>> &train, const std::vector<std::vector<float>> &test,
+               const std::vector<std::vector<uint64_t>> &neighbors,
+               const std::vector<std::vector<float>> &reference_answer, uint64_t M, uint64_t ef_construction)
 {
-    auto performence_test_result = std::ofstream("performence_test_result.txt", std::ios::app);
-    performence_test_result << "===" << std::endl;
-    auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 32, 64};
-    auto magnifications = std::vector<uint64_t>{30, 50, 100};
-    for (auto &short_edge_bound : short_edge_bounds)
+    auto test_result = std::ofstream(std::format("{0}-{1}.txt", M, ef_construction), std::ios::app | std::ios::out);
+    auto time = std::time(nullptr);
+    auto UTC_time = std::gmtime(&time);
+    test_result << UTC_time->tm_year + 1900 << " " << UTC_time->tm_mon + 1 << " " << UTC_time->tm_mday << " "
+                << UTC_time->tm_hour + 8 << " " << UTC_time->tm_min << " " << UTC_time->tm_sec << std::endl;
+    std::vector<uint64_t> p{10, 20, 40, 80, 120, 200, 400, 600, 800};
+    test_result << "p: [" << p[0];
+    for (auto i = 1; i < p.size(); ++i)
     {
-        for (auto &magnification : magnifications)
-        {
-            miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, 10);
-            for (auto i = 0; i < train.size(); ++i)
-            {
-                miluann::add(index, i, train[i]);
-            }
-            for (auto &magnification : magnifications)
-            {
-                uint64_t total_hit = 0;
-                uint64_t total_time = 0;
-                for (auto i = 0; i < test.size(); ++i)
-                {
-                    auto begin = std::chrono::high_resolution_clock::now();
-                    auto query_result = miluann::search(index, test[i], neighbors[i].size(), magnification);
-                    auto end = std::chrono::high_resolution_clock::now();
-                    total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                    auto hit = verify(reference_answer, i, query_result);
-                    total_hit += hit;
-                }
-                performence_test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit,
-                                                       total_time / test.size())
-                                        << std::endl;
-                std::cout << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit,
-                                         total_time / test.size())
-                          << std::endl;
-            }
-        }
+        test_result << ", " << p[i];
     }
-    performence_test_result << "===" << std::endl;
+    test_result << "]" << std::endl;
+
+    int dim = train[0].size();
+    int max_elements = train.size();
+    // Initing index
+    hnswlib::L2Space space(dim);
+    hnswlib::HierarchicalNSW<float> *alg_hnsw =
+        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+
+    // Add data to index
+    uint64_t total_time = 0;
+    for (int i = 0; i < max_elements; i++)
+    {
+        // auto begin = std::chrono::high_resolution_clock::now();
+        alg_hnsw->addPoint(train[i].data(), i);
+        // auto end = std::chrono::high_resolution_clock::now();
+        // total_time += std::chrono::duration_cast<std::chrono::microseconds>(end
+        // - begin).count();
+    }
+    // std::cout << "build average time: " << total_time / train.size() <<
+    // std::endl; std::cout << "build time: " << total_time << std::endl;
+
+    for (auto &pp : p)
+    {
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+        alg_hnsw->setEf(pp);
+        // Query the elements for themselves and measure recall
+        for (int i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test[i].data(), 100);
+            auto end = std::chrono::high_resolution_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            total_hit += verify(reference_answer, i, result);
+        }
+        // std::cout << "query average time: " << total_time / test.size() <<
+        // std::endl; std::cout << "total hit: " << total_hit << std::endl;
+        // std::cout << total_hit << "    " << total_time / test.size() << std::endl;
+        test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
+                    << std::endl;
+    }
+
+    delete alg_hnsw;
+    done_semaphore.acquire();
+    ++done_thread;
+    if (done_thread == done_number)
+    {
+        done.release();
+    }
+    done_semaphore.release();
+    available_thread.release();
+}
+
+void base_test(const std::vector<std::vector<float>> &train, const std::vector<std::vector<float>> &test,
+               const std::vector<std::vector<uint64_t>> &neighbors,
+               const std::vector<std::vector<float>> &reference_answer, uint64_t short_edge_bound,
+               uint64_t build_magnification, std::vector<uint64_t> search_magnifications)
+{
+    auto test_result =
+        std::ofstream(std::format("{0}-{1}.txt", short_edge_bound, build_magnification), std::ios::app | std::ios::out);
+    auto time = std::time(nullptr);
+    auto UTC_time = std::gmtime(&time);
+    test_result << UTC_time->tm_year + 1900 << " " << UTC_time->tm_mon + 1 << " " << UTC_time->tm_mday << " "
+                << UTC_time->tm_hour + 8 << " " << UTC_time->tm_min << " " << UTC_time->tm_sec << std::endl;
+    test_result << "search_magnifications: [" << search_magnifications[0];
+    for (auto i = 1; i < search_magnifications.size(); ++i)
+    {
+        test_result << ", " << search_magnifications[i];
+    }
+    test_result << "]" << std::endl;
+    miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, 10, 0);
+    for (auto i = 0; i < train.size(); ++i)
+    {
+        miluann::add(index, i, train[i]);
+    }
+    for (auto i = 0; i < search_magnifications.size(); ++i)
+    {
+        auto search_magnification = search_magnifications[i];
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+        for (auto i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result = miluann::search(index, test[i], neighbors[i].size(), search_magnification);
+            auto end = std::chrono::high_resolution_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            auto hit = verify(reference_answer, i, query_result);
+            total_hit += hit;
+        }
+        test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
+                    << std::endl;
+        // std::cout << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
+        //           << std::endl;
+    }
+    test_result.close();
+    done_semaphore.acquire();
+    ++done_thread;
+    if (done_thread == done_number)
+    {
+        done.release();
+    }
+    done_semaphore.release();
+    available_thread.release();
 }
 
 int main(int argc, char **argv)
@@ -147,10 +235,40 @@ int main(int argc, char **argv)
 #else
     std::cout << "no SIMD supported. " << std::endl;
 #endif
+    std::cout << "CPU physical units: " << std::thread::hardware_concurrency() << std::endl;
     auto train = load_vector(argv[1]);
     auto test = load_vector(argv[2]);
     auto neighbors = load_neighbors(argv[3]);
     auto reference_answer = get_reference_answer(train, test, neighbors);
-    performence_test(train, test, neighbors, reference_answer);
+    // auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 32};
+    // auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
+    // done_number = short_edge_bounds.size() * build_magnifications.size();
+    // auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
+    // for (auto i = 0; i < short_edge_bounds.size(); ++i)
+    // {
+    //     auto short_edge_bound = short_edge_bounds[i];
+    //     for (auto j = 0; j < build_magnifications.size(); ++j)
+    //     {
+    //         auto build_magnification = build_magnifications[j];
+    //         available_thread.acquire();
+    //         auto one_thread = std::thread(base_test, train, test, neighbors, reference_answer, short_edge_bound,
+    //                                       build_magnification, search_magnifications);
+    //         one_thread.detach();
+    //     }
+    // }
+
+    std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
+    std::vector<uint64_t> ef_constructions{100, 200, 300, 400, 500, 600, 700, 800};
+    done_number = Ms.size() * ef_constructions.size();
+    for (auto &M : Ms)
+    {
+        for (auto &ef_construction : ef_constructions)
+        {
+            available_thread.acquire();
+            auto one_thread = std::thread(test_hnsw, test, test, neighbors, reference_answer, M, ef_construction);
+            one_thread.detach();
+        }
+    }
+    done.acquire();
     return 0;
 }

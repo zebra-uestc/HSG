@@ -48,11 +48,14 @@ class Index_Parameters
     uint64_t termination_condition;
     // 短边数量限制
     uint64_t short_edge_bound;
+    //
+    uint64_t prune_coefficient;
 
     explicit Index_Parameters(const uint64_t dimension, const Distance_Type distance_type, const uint64_t magnification,
-                              const uint64_t short_edge_bound)
+                              const uint64_t short_edge_bound, uint64_t prune_coefficient)
         : dimension(dimension), distance_type(distance_type), magnification(magnification),
-          termination_condition(short_edge_bound + magnification), short_edge_bound(short_edge_bound)
+          termination_condition(short_edge_bound + magnification), short_edge_bound(short_edge_bound),
+          prune_coefficient(prune_coefficient)
     {
     }
 };
@@ -74,8 +77,8 @@ class Index
     std::unordered_map<uint64_t, Vector> vectors;
 
     explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t short_edge_bound,
-                   const uint64_t magnification)
-        : parameters(dimension, distance_type, magnification, short_edge_bound), count(1),
+                   const uint64_t magnification, uint64_t prune_coefficient)
+        : parameters(dimension, distance_type, magnification, short_edge_bound, prune_coefficient), count(1),
           distance_calculation(get_distance_calculation_function(distance_type))
     {
         this->vectors.insert({std::numeric_limits<uint64_t>::max(),
@@ -214,14 +217,15 @@ bool prune(Index &index, Vector &pruned_vector, Vector &new_long_edge, float dis
     auto watershed = pruned_vector.long_edge_out.lower_bound(distance);
     for (auto iterator = watershed; iterator != pruned_vector.long_edge_out.end(); ++iterator)
     {
-        if (1.2 * index.distance_calculation(index.vectors.find(iterator->second)->second.data.data(),
-                                             new_long_edge.data.data(), index.parameters.dimension) <
+        if (index.parameters.prune_coefficient *
+                index.distance_calculation(index.vectors.find(iterator->second)->second.data.data(),
+                                           new_long_edge.data.data(), index.parameters.dimension) <
             iterator->first)
             return true;
     }
     for (auto iterator = pruned_vector.long_edge_out.begin(); iterator != watershed;)
     {
-        if (1.2 * iterator->first < distance)
+        if (index.parameters.prune_coefficient * iterator->first < distance)
         {
             index.vectors.find(iterator->second)->second.long_edge_in.erase(pruned_vector.id);
             iterator = pruned_vector.long_edge_out.erase(iterator);
