@@ -10,8 +10,6 @@ project(
         LANGUAGES CXX
 )
 
-add_subdirectory(source)
-
 # if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -55,4 +53,5 @@ message(STATUS "Physical cores: ${PHYSICAL_CORES}")
 cmake_host_system_information(RESULT LOGICAL_CORES QUERY NUMBER_OF_LOGICAL_CORES)
 message(STATUS "Logical cores: ${LOGICAL_CORES}")
 
+add_subdirectory(source)
 add_subdirectory(example)
