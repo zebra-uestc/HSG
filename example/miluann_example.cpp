@@ -194,20 +194,26 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, std::vec
     }
     for (auto i = 0; i < search_magnifications.size(); ++i)
     {
+        auto times = std::vector<uint64_t>(7, 0);
         auto search_magnification = search_magnifications[i];
         uint64_t total_hit = 0;
         uint64_t total_time = 0;
         for (auto i = 0; i < test.size(); ++i)
         {
-            auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = miluann::search(index, test[i], neighbors[i].size(), search_magnification);
-            auto end = std::chrono::high_resolution_clock::now();
-            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(i, query_result);
-            total_hit += hit;
+            // auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result = miluann::search(times, index, test[i], neighbors[i].size(), search_magnification);
+            // auto end = std::chrono::high_resolution_clock::now();
+            // total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            // auto hit = verify(i, query_result);
+            // total_hit += hit;
         }
-        test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
-                    << std::endl;
+        for (auto i = 0; i < times.size(); ++i)
+        {
+            test_result << times[i] << std::endl;
+        }
+        test_result << "===" << std::endl;
+        // test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
+        //             << std::endl;
         // std::cout << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
         //           << std::endl;
     }
@@ -251,8 +257,7 @@ int main(int argc, char **argv)
         {
             auto build_magnification = build_magnifications[j];
             available_thread.acquire();
-            auto one_thread = std::thread(base_test, train, test, neighbors, reference_answer, short_edge_bound,
-                                          build_magnification, search_magnifications);
+            auto one_thread = std::thread(base_test, short_edge_bound, build_magnification, search_magnifications);
             one_thread.detach();
         }
     }
