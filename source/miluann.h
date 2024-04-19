@@ -49,10 +49,10 @@ class Index_Parameters
     // 短边数量限制
     uint64_t short_edge_bound;
     //
-    uint64_t prune_coefficient;
+    float prune_coefficient;
 
     explicit Index_Parameters(const uint64_t dimension, const Distance_Type distance_type, const uint64_t magnification,
-                              const uint64_t short_edge_bound, uint64_t prune_coefficient)
+                              const uint64_t short_edge_bound, float prune_coefficient)
         : dimension(dimension), distance_type(distance_type), magnification(magnification),
           termination_condition(short_edge_bound + magnification), short_edge_bound(short_edge_bound),
           prune_coefficient(prune_coefficient)
@@ -77,7 +77,7 @@ class Index
     std::unordered_map<uint64_t, Vector> vectors;
 
     explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t short_edge_bound,
-                   const uint64_t magnification, uint64_t prune_coefficient)
+                   const uint64_t magnification, float prune_coefficient)
         : parameters(dimension, distance_type, magnification, short_edge_bound, prune_coefficient), count(1),
           distance_calculation(get_distance_calculation_function(distance_type))
     {
@@ -108,7 +108,6 @@ std::pair<std::priority_queue<std::pair<float, uint64_t>>, std::multimap<float, 
     // 利用长边快速找到定位到处于目标向量附近区域的向量
     while (true)
     {
-        auto processing_distance = waiting_vectors.top().first;
         auto processing_id = waiting_vectors.top().second;
         auto &processing_vector = index.vectors.find(processing_id)->second;
         for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
@@ -126,7 +125,7 @@ std::pair<std::priority_queue<std::pair<float, uint64_t>>, std::multimap<float, 
                                       neighbor_id});
             }
         }
-        if (processing_distance <= waiting_vectors.top().first)
+        if (processing_id == waiting_vectors.top().second)
         {
             break;
         }
@@ -137,7 +136,7 @@ std::pair<std::priority_queue<std::pair<float, uint64_t>>, std::multimap<float, 
     {
         auto processing_distance = waiting_vectors.top().first;
         auto processing_id = waiting_vectors.top().second;
-        auto processing_vector = index.vectors.find(processing_id)->second;
+        auto &processing_vector = index.vectors.find(processing_id)->second;
         waiting_vectors.pop();
         // 如果优先队列中的向量的数量小于k
         if (nearest_neighbors.size() < index.parameters.termination_condition)
@@ -320,11 +319,10 @@ void add(Index &index, const uint64_t id, const std::vector<float> &added_vector
         // 如果新向量距离邻居的距离小于邻居当前距离最大的出边的距离
         else if (distance < neighbor.short_edge_out.rbegin()->first)
         {
-            auto max_distance = neighbor.short_edge_out.rbegin()->first;
             auto farest_id = neighbor.short_edge_out.rbegin()->second;
             // 邻居向量删除距离最大的出边
             neighbor.short_edge_out.erase(std::prev(neighbor.short_edge_out.end()));
-            auto temporary = index.vectors.find(farest_id)->second;
+            auto &temporary = index.vectors.find(farest_id)->second;
             temporary.short_edge_in.erase(neighbor.id);
             if (!neighbor.short_edge_in.contains(farest_id) && !connected(index, neighbor, farest_id))
             {
@@ -557,6 +555,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
                                                                          const uint64_t magnification,
                                                                          std::vector<uint64_t> &times)
 {
+    auto begin = std::chrono::high_resolution_clock::now();
     // 优先队列
     auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
     // 标记是否被遍历过
@@ -565,7 +564,6 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
     // 排队队列
     auto waiting_vectors =
         std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
-    auto begin = std::chrono::high_resolution_clock::now();
     auto &zero_vector = index.vectors.find(std::numeric_limits<uint64_t>::max())->second;
     for (auto iterator = zero_vector.long_edge_out.begin(); iterator != zero_vector.long_edge_out.end(); ++iterator)
     {
@@ -610,7 +608,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
         begin = std::chrono::high_resolution_clock::now();
         auto processing_distance = waiting_vectors.top().first;
         auto processing_vector_id = waiting_vectors.top().second;
-        auto processing_vector = index.vectors.find(processing_vector_id)->second;
+        auto &processing_vector = index.vectors.find(processing_vector_id)->second;
         waiting_vectors.pop();
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < top_k + magnification)
@@ -663,64 +661,65 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
                 times[6] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             }
         }
-        for (auto iterator = processing_vector.short_edge_in.begin(); iterator != processing_vector.short_edge_in.end();
-             ++iterator)
-        {
-            auto neighbor_id = iterator->first;
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            begin = std::chrono::high_resolution_clock::now();
-            auto t2 = visited.contains(neighbor_id);
-            end = std::chrono::high_resolution_clock::now();
-            times[2] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            if (!t2)
-            {
-                begin = std::chrono::high_resolution_clock::now();
-                visited.insert(neighbor_id);
-                end = std::chrono::high_resolution_clock::now();
-                times[3] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                auto t4 = index.vectors.find(neighbor_id)->second.data.data();
-                end = std::chrono::high_resolution_clock::now();
-                times[4] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                auto d4 = index.distance_calculation(target_vector.data(), t4, index.parameters.dimension);
-                end = std::chrono::high_resolution_clock::now();
-                times[5] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                waiting_vectors.push({d4, neighbor_id});
-                end = std::chrono::high_resolution_clock::now();
-                times[6] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            }
-        }
-        for (auto iterator = processing_vector.keep_connected.begin();
-             iterator != processing_vector.keep_connected.end(); ++iterator)
-        {
-            auto neighbor_id = *iterator;
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            begin = std::chrono::high_resolution_clock::now();
-            auto t2 = visited.contains(neighbor_id);
-            end = std::chrono::high_resolution_clock::now();
-            times[2] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            if (!t2)
-            {
-                begin = std::chrono::high_resolution_clock::now();
-                visited.insert(neighbor_id);
-                end = std::chrono::high_resolution_clock::now();
-                times[3] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                auto t4 = index.vectors.find(neighbor_id)->second.data.data();
-                end = std::chrono::high_resolution_clock::now();
-                times[4] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                auto d4 = index.distance_calculation(target_vector.data(), t4, index.parameters.dimension);
-                end = std::chrono::high_resolution_clock::now();
-                times[5] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-                begin = std::chrono::high_resolution_clock::now();
-                waiting_vectors.push({d4, neighbor_id});
-                end = std::chrono::high_resolution_clock::now();
-                times[6] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            }
-        }
+        // for (auto iterator = processing_vector.short_edge_in.begin(); iterator !=
+        // processing_vector.short_edge_in.end();
+        //      ++iterator)
+        // {
+        //     auto neighbor_id = iterator->first;
+        //     // 计算当前向量的出边指向的向量和目标向量的距离
+        //     begin = std::chrono::high_resolution_clock::now();
+        //     auto t2 = visited.contains(neighbor_id);
+        //     end = std::chrono::high_resolution_clock::now();
+        //     times[2] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //     if (!t2)
+        //     {
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         visited.insert(neighbor_id);
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[3] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         auto t4 = index.vectors.find(neighbor_id)->second.data.data();
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[4] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         auto d4 = index.distance_calculation(target_vector.data(), t4, index.parameters.dimension);
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[5] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         waiting_vectors.push({d4, neighbor_id});
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[6] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //     }
+        // }
+        // for (auto iterator = processing_vector.keep_connected.begin();
+        //      iterator != processing_vector.keep_connected.end(); ++iterator)
+        // {
+        //     auto neighbor_id = *iterator;
+        //     // 计算当前向量的出边指向的向量和目标向量的距离
+        //     begin = std::chrono::high_resolution_clock::now();
+        //     auto t2 = visited.contains(neighbor_id);
+        //     end = std::chrono::high_resolution_clock::now();
+        //     times[2] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //     if (!t2)
+        //     {
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         visited.insert(neighbor_id);
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[3] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         auto t4 = index.vectors.find(neighbor_id)->second.data.data();
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[4] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         auto d4 = index.distance_calculation(target_vector.data(), t4, index.parameters.dimension);
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[5] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //         begin = std::chrono::high_resolution_clock::now();
+        //         waiting_vectors.push({d4, neighbor_id});
+        //         end = std::chrono::high_resolution_clock::now();
+        //         times[6] += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        //     }
+        // }
     }
     return nearest_neighbors;
 }

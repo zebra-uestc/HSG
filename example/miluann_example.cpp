@@ -187,7 +187,7 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, std::vec
         test_result << ", " << search_magnifications[i];
     }
     test_result << "]" << std::endl;
-    miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, 10, 0);
+    miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, 10, 1.2);
     for (auto i = 0; i < train.size(); ++i)
     {
         miluann::add(index, i, train[i]);
