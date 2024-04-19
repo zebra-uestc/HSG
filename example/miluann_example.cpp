@@ -11,9 +11,12 @@
 #include "distance.h"
 #include "miluann.h"
 
-std::vector<std::vector<float>> get_reference_answer(const std::vector<std::vector<float>> &train,
-                                                     const std::vector<std::vector<float>> &test,
-                                                     const std::vector<std::vector<uint64_t>> &neighbors)
+std::vector<std::vector<float>> train;
+std::vector<std::vector<float>> test;
+std::vector<std::vector<uint64_t>> neighbors;
+std::vector<std::vector<float>> reference_answer;
+
+std::vector<std::vector<float>> get_reference_answer()
 {
     auto reference_answer = std::vector<std::vector<float>>(test.size(), std::vector<float>(neighbors[0].size(), 0));
     for (auto i = 0; i < test.size(); ++i)
@@ -27,17 +30,17 @@ std::vector<std::vector<float>> get_reference_answer(const std::vector<std::vect
     return reference_answer;
 }
 
-uint64_t verify(const std::vector<std::vector<float>> &reference_answer, const uint64_t test,
-                std::priority_queue<std::pair<float, uint64_t>> &query_result)
+uint64_t verify(const uint64_t t, std::priority_queue<std::pair<float, uint64_t>> &query_result)
 {
     auto result = std::vector<float>(query_result.size(), 0);
     while (!query_result.empty())
     {
-        result[query_result.size() - 1] = query_result.top().first;
+        result[query_result.size() - 1] =
+            euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
         query_result.pop();
     }
     uint64_t hit = 0;
-    for (auto distance : reference_answer[test])
+    for (auto distance : reference_answer[t])
     {
         if (result[hit] <= distance)
         {
@@ -103,9 +106,7 @@ uint64_t done_thread = 0;
 uint64_t done_number = 0;
 auto done = std::counting_semaphore<>(0);
 
-void test_hnsw(const std::vector<std::vector<float>> &train, const std::vector<std::vector<float>> &test,
-               const std::vector<std::vector<uint64_t>> &neighbors,
-               const std::vector<std::vector<float>> &reference_answer, uint64_t M, uint64_t ef_construction)
+void test_hnsw(uint64_t M, uint64_t ef_construction)
 {
     auto test_result = std::ofstream(std::format("{0}-{1}.txt", M, ef_construction), std::ios::app | std::ios::out);
     auto time = std::time(nullptr);
@@ -152,7 +153,7 @@ void test_hnsw(const std::vector<std::vector<float>> &train, const std::vector<s
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test[i].data(), 100);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            total_hit += verify(reference_answer, i, result);
+            total_hit += verify(i, result);
         }
         // std::cout << "query average time: " << total_time / test.size() <<
         // std::endl; std::cout << "total hit: " << total_hit << std::endl;
@@ -172,10 +173,7 @@ void test_hnsw(const std::vector<std::vector<float>> &train, const std::vector<s
     available_thread.release();
 }
 
-void base_test(const std::vector<std::vector<float>> &train, const std::vector<std::vector<float>> &test,
-               const std::vector<std::vector<uint64_t>> &neighbors,
-               const std::vector<std::vector<float>> &reference_answer, uint64_t short_edge_bound,
-               uint64_t build_magnification, std::vector<uint64_t> search_magnifications)
+void base_test(uint64_t short_edge_bound, uint64_t build_magnification, std::vector<uint64_t> search_magnifications)
 {
     auto test_result =
         std::ofstream(std::format("{0}-{1}.txt", short_edge_bound, build_magnification), std::ios::app | std::ios::out);
@@ -205,7 +203,7 @@ void base_test(const std::vector<std::vector<float>> &train, const std::vector<s
             auto query_result = miluann::search(index, test[i], neighbors[i].size(), search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(reference_answer, i, query_result);
+            auto hit = verify(i, query_result);
             total_hit += hit;
         }
         test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
@@ -236,39 +234,42 @@ int main(int argc, char **argv)
     std::cout << "no SIMD supported. " << std::endl;
 #endif
     std::cout << "CPU physical units: " << std::thread::hardware_concurrency() << std::endl;
-    auto train = load_vector(argv[1]);
-    auto test = load_vector(argv[2]);
-    auto neighbors = load_neighbors(argv[3]);
-    auto reference_answer = get_reference_answer(train, test, neighbors);
-    // auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 32};
-    // auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
-    // done_number = short_edge_bounds.size() * build_magnifications.size();
-    // auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
-    // for (auto i = 0; i < short_edge_bounds.size(); ++i)
-    // {
-    //     auto short_edge_bound = short_edge_bounds[i];
-    //     for (auto j = 0; j < build_magnifications.size(); ++j)
-    //     {
-    //         auto build_magnification = build_magnifications[j];
-    //         available_thread.acquire();
-    //         auto one_thread = std::thread(base_test, train, test, neighbors, reference_answer, short_edge_bound,
-    //                                       build_magnification, search_magnifications);
-    //         one_thread.detach();
-    //     }
-    // }
 
-    std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
-    std::vector<uint64_t> ef_constructions{100, 200, 300, 400, 500, 600, 700, 800};
-    done_number = Ms.size() * ef_constructions.size();
-    for (auto &M : Ms)
+    train = load_vector(argv[1]);
+    test = load_vector(argv[2]);
+    neighbors = load_neighbors(argv[3]);
+    reference_answer = get_reference_answer();
+
+    auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 24, 32};
+    auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
+    done_number = short_edge_bounds.size() * build_magnifications.size();
+    auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
+    for (auto i = 0; i < short_edge_bounds.size(); ++i)
     {
-        for (auto &ef_construction : ef_constructions)
+        auto short_edge_bound = short_edge_bounds[i];
+        for (auto j = 0; j < build_magnifications.size(); ++j)
         {
+            auto build_magnification = build_magnifications[j];
             available_thread.acquire();
-            auto one_thread = std::thread(test_hnsw, test, test, neighbors, reference_answer, M, ef_construction);
+            auto one_thread = std::thread(base_test, train, test, neighbors, reference_answer, short_edge_bound,
+                                          build_magnification, search_magnifications);
             one_thread.detach();
         }
     }
     done.acquire();
+
+    // std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
+    // std::vector<uint64_t> ef_constructions{500};
+    // done_number = Ms.size() * ef_constructions.size();
+    // for (auto &M : Ms)
+    // {
+    //     for (auto &ef_construction : ef_constructions)
+    //     {
+    //         available_thread.acquire();
+    //         auto one_thread = std::thread(test_hnsw, M, ef_construction);
+    //         one_thread.detach();
+    //     }
+    // }
+    // done.acquire();
     return 0;
 }
