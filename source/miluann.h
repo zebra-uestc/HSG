@@ -48,7 +48,7 @@ class Index_Parameters
     // 短边数量限制
     uint64_t short_edge_bound;
     //
-    uint64_t prune_coefficient;
+    float prune_coefficient;
 
     explicit Index_Parameters(const uint64_t dimension, const Distance_Type distance_type, const uint64_t magnification,
                               const uint64_t short_edge_bound, uint64_t prune_coefficient)
@@ -78,7 +78,7 @@ class Index
     std::vector<float> zero;
 
     explicit Index(const Distance_Type distance_type, const uint64_t dimension, const uint64_t short_edge_bound,
-                   const uint64_t magnification, uint64_t prune_coefficient)
+                   const uint64_t magnification, float prune_coefficient)
         : parameters(dimension, distance_type, magnification, short_edge_bound, prune_coefficient), count(1),
           distance_calculation(get_distance_calculation_function(distance_type)), zero(dimension, 0.0)
     {

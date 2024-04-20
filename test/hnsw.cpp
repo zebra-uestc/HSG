@@ -9,7 +9,6 @@
 
 #include "../../hnswlib/hnswlib/hnswlib.h"
 #include "distance.h"
-#include "miluann.h"
 
 std::vector<std::vector<float>> train;
 std::vector<std::vector<float>> test;
@@ -100,7 +99,7 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
     return neighbors;
 }
 
-auto available_thread = std::counting_semaphore<>(std::thread::hardware_concurrency() - 2);
+auto available_thread = std::counting_semaphore<>(12);
 auto done_semaphore = std::counting_semaphore<>(1);
 uint64_t done_thread = 0;
 uint64_t done_number = 0;
@@ -108,11 +107,15 @@ auto done = std::counting_semaphore<>(0);
 
 void test_hnsw(uint64_t M, uint64_t ef_construction)
 {
-    auto test_result = std::ofstream(std::format("{0}-{1}.txt", M, ef_construction), std::ios::app | std::ios::out);
+    auto test_result =
+        std::ofstream(std::format("result/hnsw/{0}-{1}.txt", M, ef_construction), std::ios::app | std::ios::out);
+
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
-    test_result << UTC_time->tm_year + 1900 << " " << UTC_time->tm_mon + 1 << " " << UTC_time->tm_mday << " "
-                << UTC_time->tm_hour + 8 << " " << UTC_time->tm_min << " " << UTC_time->tm_sec << std::endl;
+    test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
+                << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
+
+    test_result << std::format("M: {0:>4} {1:>4}", M, ef_construction) << std::endl;
     std::vector<uint64_t> p{10, 20, 40, 80, 120, 200, 400, 600, 800};
     test_result << "p: [" << p[0];
     for (auto i = 1; i < p.size(); ++i)
@@ -158,64 +161,11 @@ void test_hnsw(uint64_t M, uint64_t ef_construction)
         // std::cout << "query average time: " << total_time / test.size() <<
         // std::endl; std::cout << "total hit: " << total_hit << std::endl;
         // std::cout << total_hit << "    " << total_time / test.size() << std::endl;
-        test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
+        test_result << std::format("total hit: {0:>13} average time: {1:>13}us", total_hit, total_time / test.size())
                     << std::endl;
     }
 
     delete alg_hnsw;
-    done_semaphore.acquire();
-    ++done_thread;
-    if (done_thread == done_number)
-    {
-        done.release();
-    }
-    done_semaphore.release();
-    available_thread.release();
-}
-
-void base_test(uint64_t short_edge_bound, uint64_t build_magnification, std::vector<uint64_t> search_magnifications)
-{
-    auto test_result =
-        std::ofstream(std::format("{0}-{1}.txt", short_edge_bound, build_magnification), std::ios::app | std::ios::out);
-
-    auto time = std::time(nullptr);
-    auto UTC_time = std::gmtime(&time);
-    test_result << UTC_time->tm_year + 1900 << " " << UTC_time->tm_mon + 1 << " " << UTC_time->tm_mday << " "
-                << UTC_time->tm_hour + 8 << " " << UTC_time->tm_min << " " << UTC_time->tm_sec << std::endl;
-
-    test_result << "search_magnifications: [" << search_magnifications[0];
-    for (auto i = 1; i < search_magnifications.size(); ++i)
-    {
-        test_result << ", " << search_magnifications[i];
-    }
-    test_result << "]" << std::endl;
-
-    miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, 10, 0);
-
-    for (auto i = 0; i < train.size(); ++i)
-    {
-        miluann::add(index, i, train[i]);
-    }
-
-    for (auto i = 0; i < search_magnifications.size(); ++i)
-    {
-        auto search_magnification = search_magnifications[i];
-        uint64_t total_hit = 0;
-        uint64_t total_time = 0;
-        for (auto i = 0; i < test.size(); ++i)
-        {
-            auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = miluann::search(index, test[i], neighbors[i].size(), search_magnification);
-            auto end = std::chrono::high_resolution_clock::now();
-            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(i, query_result);
-            total_hit += hit;
-        }
-        test_result << std::format("total hit: {0:<7} average time: {1:<5}us", total_hit, total_time / test.size())
-                    << std::endl;
-    }
-
-    test_result.close();
     done_semaphore.acquire();
     ++done_thread;
     if (done_thread == done_number)
@@ -244,35 +194,19 @@ int main(int argc, char **argv)
     neighbors = load_neighbors(argv[3]);
     reference_answer = get_reference_answer();
 
-    auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 24, 32};
-    auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
-    done_number = short_edge_bounds.size() * build_magnifications.size();
-    auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50, 100};
-    for (auto i = 0; i < short_edge_bounds.size(); ++i)
+    std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
+    std::vector<uint64_t> ef_constructions{500};
+    done_number += Ms.size() * ef_constructions.size();
+    for (auto &M : Ms)
     {
-        auto short_edge_bound = short_edge_bounds[i];
-        for (auto j = 0; j < build_magnifications.size(); ++j)
+        for (auto &ef_construction : ef_constructions)
         {
-            auto build_magnification = build_magnifications[j];
             available_thread.acquire();
-            auto one_thread = std::thread(base_test, short_edge_bound, build_magnification, search_magnifications);
+            auto one_thread = std::thread(test_hnsw, M, ef_construction);
             one_thread.detach();
         }
     }
-    done.acquire();
 
-    // std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
-    // std::vector<uint64_t> ef_constructions{500};
-    // done_number = Ms.size() * ef_constructions.size();
-    // for (auto &M : Ms)
-    // {
-    //     for (auto &ef_construction : ef_constructions)
-    //     {
-    //         available_thread.acquire();
-    //         auto one_thread = std::thread(test_hnsw, M, ef_construction);
-    //         one_thread.detach();
-    //     }
-    // }
-    // done.acquire();
+    done.acquire();
     return 0;
 }

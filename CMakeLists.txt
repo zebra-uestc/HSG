@@ -1,10 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
-set (CMAKE_C_COMPILER "/home/bianhaowen/host/llvm-binary/bin/clang")
-set (CMAKE_CXX_COMPILER "/home/bianhaowen/host/llvm-binary/bin/clang++")
-
 project(
-        vector-index
+        miluann
         VERSION 1.0.0.0
         DESCRIPTION "Mi Lu ANN"
         LANGUAGES CXX
@@ -53,5 +50,5 @@ message(STATUS "Physical cores: ${PHYSICAL_CORES}")
 cmake_host_system_information(RESULT LOGICAL_CORES QUERY NUMBER_OF_LOGICAL_CORES)
 message(STATUS "Logical cores: ${LOGICAL_CORES}")
 
-add_subdirectory(source)
-add_subdirectory(example)
+# add_subdirectory(source)
+add_subdirectory(test)
