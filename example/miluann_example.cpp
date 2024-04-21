@@ -118,12 +118,12 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, uint64_t
         miluann::add(index, i, train[i]);
     }
 
-    auto times = std::vector<uint64_t>(27, 0);
+    auto times = std::vector<uint64_t>(100, 0);
     for (auto i = 0; i < test.size(); ++i)
     {
-        auto query_result = miluann::search(times, index, test[i], neighbors[i].size(), search_magnification);
+        auto query_result = miluann::search(times, index, test[i], 100, search_magnification);
     }
-    for (auto i = 0; i < times.size(); ++i)
+    for (auto i = 0; times[i] != 0; ++i)
     {
         test_result << times[i] << std::endl;
     }

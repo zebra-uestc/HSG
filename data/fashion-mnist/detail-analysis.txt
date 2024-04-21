@@ -1,0 +1,4 @@
+2024年4月21日14时54分5秒
+short edge bound: 4
+build magnification: 10
+search magnification: 10
