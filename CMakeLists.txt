@@ -51,4 +51,4 @@ cmake_host_system_information(RESULT LOGICAL_CORES QUERY NUMBER_OF_LOGICAL_CORES
 message(STATUS "Logical cores: ${LOGICAL_CORES}")
 
 # add_subdirectory(source)
-add_subdirectory(example)
+add_subdirectory(test)
