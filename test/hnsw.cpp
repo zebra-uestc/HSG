@@ -175,9 +175,11 @@ void test_hnsw(uint64_t M, uint64_t ef_construction)
     done_semaphore.release();
     available_thread.release();
 }
-
+/*
+ * 测试比较不同参数下的HNSW算法性能*/
 int main(int argc, char **argv)
-{
+{/*
+* 检查CPU是否支持SIMD指令集（AVX512、AVX、SSE）*/
 #if defined(__AVX512F__)
     std::cout << "AVX512 supported. " << std::endl;
 #elif defined(__AVX__)
@@ -187,13 +189,14 @@ int main(int argc, char **argv)
 #else
     std::cout << "no SIMD supported. " << std::endl;
 #endif
+    /*输出CPU的物理单元数量*/
     std::cout << "CPU physical units: " << std::thread::hardware_concurrency() << std::endl;
-
+/*加载向量和邻居*/
     train = load_vector(argv[1]);
     test = load_vector(argv[2]);
     neighbors = load_neighbors(argv[3]);
     reference_answer = get_reference_answer();
-
+/*参数设置*/
     std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
     std::vector<uint64_t> ef_constructions{500};
     done_number += Ms.size() * ef_constructions.size();
