@@ -4,12 +4,13 @@
 #include <queue>
 #include <random>
 #include <stack>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "distance.h"
 
-namespace miluann
+namespace HSG
 {
 
 // 向量
@@ -710,4 +711,4 @@ std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const
     return nearest_neighbors_search(index, query_vector, top_k, magnification);
 }
 
-} // namespace miluann
+} // namespace HSG
