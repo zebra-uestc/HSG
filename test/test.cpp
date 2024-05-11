@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
+#include "HSG.h"
 #include "distance.h"
-#include "miluann.h"
 
 std::vector<std::vector<float>> train;
 std::vector<std::vector<float>> test;
@@ -127,12 +127,12 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, float pr
     }
     test_result << "]" << std::endl;
 
-    miluann::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
-                         prune_coefficient);
+    HSG::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
+                     prune_coefficient);
 
     for (auto i = 0; i < train.size(); ++i)
     {
-        miluann::add(index, i, train[i]);
+        HSG::add(index, i, train[i]);
     }
 
     for (auto i = 0; i < search_magnifications.size(); ++i)
@@ -143,7 +143,7 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, float pr
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = miluann::search(index, test[i], neighbors[i].size(), search_magnification);
+            auto query_result = HSG::search(index, test[i], neighbors[i].size(), search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             auto hit = verify(i, query_result);

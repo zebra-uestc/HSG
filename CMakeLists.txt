@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(
-        miluann
+        HSG
         VERSION 1.0.0.0
-        DESCRIPTION "Mi Lu ANN"
+        DESCRIPTION "Hybrid Strides Graph"
         LANGUAGES CXX
 )
 
