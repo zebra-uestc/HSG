@@ -3,6 +3,10 @@ build
 .idea
 *.hdf5
 train
-test
 neighbors
 *.so
+.cache
+binary
+result
+test
+!test/

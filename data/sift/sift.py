@@ -4,8 +4,13 @@ import numpy as np
 import struct
 
 
-def dataset_transform(dataset: h5py.Dataset) -> Tuple[
-    Union[np.ndarray, List[np.ndarray]], Union[np.ndarray, List[np.ndarray]], Union[np.ndarray, List[np.ndarray]]]:
+def dataset_transform(
+    dataset: h5py.Dataset,
+) -> Tuple[
+    Union[np.ndarray, List[np.ndarray]],
+    Union[np.ndarray, List[np.ndarray]],
+    Union[np.ndarray, List[np.ndarray]],
+]:
     """
     Transforms the dataset from the HDF5 format to conventional numpy format.
 
@@ -20,10 +25,10 @@ def dataset_transform(dataset: h5py.Dataset) -> Tuple[
     """
 
     for i in dataset:
-        print(i, end='\n')
+        print(i, end="\n")
     print()
     for i in dataset.attrs:
-        print(i, end='\n')
+        print(i, end="\n")
     print()
     print(dataset.attrs.get("distance"))
     print()
@@ -46,19 +51,25 @@ def dataset_transform(dataset: h5py.Dataset) -> Tuple[
     print(type(np.array(dataset["neighbors"])[0][0]))
     print()
 
-    return np.array(dataset["train"]), np.array(dataset["test"]), np.array(dataset["neighbors"])
+    return (
+        np.array(dataset["train"]),
+        np.array(dataset["test"]),
+        np.array(dataset["neighbors"]),
+    )
 
 
-f = h5py.File('sift-128-euclidean.hdf5', 'r')
+f = h5py.File("sift-128-euclidean.hdf5", "r")
 train, test, neighbors = dataset_transform(f)
-with open('siftsmall/train', 'wb') as file:
+with open("train", "wb") as file:
     file.write(struct.pack("Q", len(train)))
+    print(len(train))
     file.write(struct.pack("Q", train[0].size))
+    print(train[0].size)
     for i in train:
         for j in i:
             file.write(struct.pack("f", j))
 file.close()
-with open('siftsmall/test', 'wb') as file:
+with open("test", "wb") as file:
     file.write(struct.pack("Q", len(test)))
     print(len(test))
     file.write(struct.pack("Q", test[0].size))
@@ -66,10 +77,8 @@ with open('siftsmall/test', 'wb') as file:
     for i in test:
         for j in i:
             file.write(struct.pack("f", j))
-            print(j, end="  ")
-        print()
 file.close()
-with open('siftsmall/neighbors', 'wb') as file:
+with open("neighbors", "wb") as file:
     file.write(struct.pack("Q", len(neighbors)))
     print(len(neighbors))
     file.write(struct.pack("Q", neighbors[0].size))
@@ -77,6 +86,4 @@ with open('siftsmall/neighbors', 'wb') as file:
     for i in neighbors:
         for j in i:
             file.write(struct.pack("Q", j))
-            print(j, end="  ")
-        print()
 file.close()
