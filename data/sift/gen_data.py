@@ -48,7 +48,7 @@ def get_mixed_indices(neighbors, train_size, k):
         # 确保每行至少留有十个未被抽取的元素，最后一次抽取（个数小于90）保证所有被抽取的索引个数达到k/2个
         num_elements = min(len(row) - 10, int(k / 2 - len(neighbors_sample)))
         if num_elements > 0:
-            # 随机选择num_elements个不重复的元素
+            # 随机选择num_elements个元素
             selected_row = np.random.choice(list(row), num_elements)
             # 将选择的元素添加到列表中
             neighbors_sample = np.concatenate((neighbors_sample,selected_row))
