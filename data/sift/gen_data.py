@@ -45,9 +45,8 @@ def get_mixed_indices(neighbors, train_size, k):
     # 从neighbors里选取k/2个索引
     # 对每一行进行操作，从第一行开始，选取90个元素，保证每行至少留有10个索引
     for row in neighbors:
-        # 确保每行至少留有十个未被抽取的元素，最后一次抽取（个数小于90）保证抽到k/2个索引
+        # 确保每行至少留有十个未被抽取的元素，最后一次抽取（个数小于90）保证所有被抽取的索引个数达到k/2个
         num_elements = min(len(row) - 10, int(k / 2 - len(neighbors_sample)))
-        print(row,'\n')
         if num_elements > 0:
             # 随机选择num_elements个不重复的元素
             selected_row = np.random.choice(list(row), num_elements)
@@ -73,13 +72,15 @@ k = 100
 # # 调用dataset_transform函数，将HDF5文件的内容转换为训练集、测试集和邻居集
 f = h5py.File('sift-128-euclidean.hdf5', 'r')
 train, test, neighbors = dataset_transform(f)
+'''
+# print(neighbors[0])
+# print("数据类型",type(neighbors))          #打印数组数据类型
+# print("数组元素数据类型：",neighbors.dtype)  #打印数组元素数据类型
+# print("数组元素总数：",neighbors.size)      #打印数组尺寸，即数组元素总数
+# print("数组形状：",neighbors.shape)         #打印数组形状
+# print("数组的维度数目",neighbors.ndim)      #打印数组的维度数目
+'''
 # 找出在neighbors中没有出现过的索引
 non_neighbors_indices = get_non_neighbors_indices(neighbors, len(train), k)
+# k/2个非邻居索引，k/2个邻居索引
 mixed_indices = get_mixed_indices(neighbors, len(train), k)
-
-print(neighbors[0])
-print("数据类型",type(neighbors))          #打印数组数据类型
-print("数组元素数据类型：",neighbors.dtype)  #打印数组元素数据类型
-print("数组元素总数：",neighbors.size)      #打印数组尺寸，即数组元素总数
-print("数组形状：",neighbors.shape)         #打印数组形状
-print("数组的维度数目",neighbors.ndim)      #打印数组的维度数目
