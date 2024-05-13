@@ -286,31 +286,31 @@ void nearest_neighbors_add(const Index &index, const std::vector<float> &target_
 // 先判断新的长边是否添加
 // 如果添加
 // 则裁切之前的长边
-bool prune(Index &index, Vector &pruned_vector, Vector &new_long_edge, float distance)
-{
-    auto watershed = pruned_vector.long_edge_out.lower_bound(distance);
-    for (auto iterator = watershed; iterator != pruned_vector.long_edge_out.end(); ++iterator)
-    {
-        if (index.parameters.prune_coefficient * index.similarity(index.vectors[iterator->second].data.data(),
-                                                                  new_long_edge.data.data(),
-                                                                  index.parameters.dimension) <
-            iterator->first)
-            return true;
-    }
-    for (auto iterator = pruned_vector.long_edge_out.begin(); iterator != watershed;)
-    {
-        if (index.parameters.prune_coefficient * iterator->first < distance)
-        {
-            index.vectors[iterator->second].long_edge_in.erase(pruned_vector.offset);
-            iterator = pruned_vector.long_edge_out.erase(iterator);
-        }
-        else
-        {
-            ++iterator;
-        }
-    }
-    return false;
-}
+// bool prune(Index &index, Vector &pruned_vector, Vector &new_long_edge, float distance)
+// {
+//     auto watershed = pruned_vector.long_edge_out.lower_bound(distance);
+//     for (auto iterator = watershed; iterator != pruned_vector.long_edge_out.end(); ++iterator)
+//     {
+//         if (index.parameters.prune_coefficient * index.similarity(index.vectors[iterator->second].data.data(),
+//                                                                   new_long_edge.data.data(),
+//                                                                   index.parameters.dimension) <
+//             iterator->first)
+//             return true;
+//     }
+//     for (auto iterator = pruned_vector.long_edge_out.begin(); iterator != watershed;)
+//     {
+//         if (index.parameters.prune_coefficient * iterator->first < distance)
+//         {
+//             index.vectors[iterator->second].long_edge_in.erase(pruned_vector.offset);
+//             iterator = pruned_vector.long_edge_out.erase(iterator);
+//         }
+//         else
+//         {
+//             ++iterator;
+//         }
+//     }
+//     return false;
+// }
 
 bool connected(const Index &index, const Vector &vector, uint64_t offset)
 {
@@ -319,32 +319,39 @@ bool connected(const Index &index, const Vector &vector, uint64_t offset)
     auto last = std::unordered_set<uint64_t>();
     last.insert(vector.offset);
     auto next = std::unordered_set<uint64_t>();
+
     for (auto round = 0; round < 4; ++round)
     {
         for (auto iterator = last.begin(); iterator != last.end(); ++iterator)
         {
             auto &t = index.vectors[*iterator];
+
             for (auto iterator = t.short_edge_in.begin(); iterator != t.short_edge_in.end(); ++iterator)
             {
                 auto &t1 = *iterator;
+
                 if (!visited[t1])
                 {
                     visited[1] = true;
                     next.insert(t1);
                 }
             }
+
             for (auto iterator = t.short_edge_out.begin(); iterator != t.short_edge_out.end(); ++iterator)
             {
                 auto &t1 = iterator->second;
+
                 if (!visited[t1])
                 {
                     visited[1] = true;
                     next.insert(t1);
                 }
             }
+
             for (auto iterator = t.keep_connected.begin(); iterator != t.keep_connected.end(); ++iterator)
             {
                 auto &t1 = *iterator;
+
                 if (!visited[t1])
                 {
                     visited[1] = true;
@@ -353,20 +360,24 @@ bool connected(const Index &index, const Vector &vector, uint64_t offset)
             }
         }
     }
+
     if (visited[offset])
     {
         return true;
     }
+
     return false;
 }
 
 // 添加
 void add(Index &index, const uint64_t id, std::vector<float> &added_vector_data)
 {
-    auto offset = uint64_t(0);
+    auto offset = uint64_t(index.count);
+    // 索引中向量数量加一
+    ++index.count;
+
     if (index.empty.empty())
     {
-        offset = index.count;
         // 在索引中创建一个新向量
         index.vectors.push_back(Vector(id, offset, added_vector_data));
     }
@@ -377,11 +388,8 @@ void add(Index &index, const uint64_t id, std::vector<float> &added_vector_data)
         index.vectors[offset].id = id;
         index.vectors[offset].data = added_vector_data;
     }
-    // 索引中向量数量加一
-    ++index.count;
 
     auto &new_vector = index.vectors[offset];
-
     // 搜索距离新增向量最近的index.parameters.short_edge_lower_limit个向量
     // 同时记录搜索过程中遇到的向量
     auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
@@ -398,6 +406,7 @@ void add(Index &index, const uint64_t id, std::vector<float> &added_vector_data)
         new_vector.short_edge_out.insert({distance, neighbor.offset});
         // 为邻居向量添加入边
         neighbor.short_edge_in.insert(offset);
+
         // 如果邻居向量的出边小于限制
         if (neighbor.short_edge_out.size() < index.parameters.short_edge_lower_limit)
         {
@@ -414,23 +423,27 @@ void add(Index &index, const uint64_t id, std::vector<float> &added_vector_data)
             neighbor.short_edge_out.erase(std::prev(neighbor.short_edge_out.end()));
             auto &temporary = index.vectors[farest_offset];
             temporary.short_edge_in.erase(neighbor.offset);
+
             if (!neighbor.short_edge_in.contains(farest_offset) && !connected(index, neighbor, farest_offset))
             {
                 neighbor.keep_connected.insert(farest_offset);
                 temporary.keep_connected.insert(neighbor.offset);
             }
+
             // 邻居向量添加出边
             neighbor.short_edge_out.insert({distance, offset});
             // 新向量添加入边
             new_vector.short_edge_in.insert(neighbor.offset);
         }
     }
+
     // 添加长边
     for (auto iterator = path.begin(); iterator != path.end();)
     {
         auto distance = iterator->first;
         auto &vector = index.vectors[iterator->second];
         bool add = true;
+
         for (auto added_edge_iterator = path.begin(); added_edge_iterator != iterator; ++added_edge_iterator)
         {
             if (index.similarity(index.vectors[added_edge_iterator->second].data.data(), vector.data.data(),
@@ -441,7 +454,8 @@ void add(Index &index, const uint64_t id, std::vector<float> &added_vector_data)
                 break;
             }
         }
-        if (add && !prune(index, vector, new_vector, distance))
+
+        if (add)
         {
             ++iterator;
             vector.long_edge_out.insert({distance, offset});
@@ -655,6 +669,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
     auto waiting_vectors =
         std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
     auto &zero_vector = index.vectors[0];
+
     for (auto iterator = zero_vector.long_edge_out.begin(); iterator != zero_vector.long_edge_out.end(); ++iterator)
     {
         auto &neighbor_offset = iterator->second;
@@ -663,16 +678,19 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
                                                index.parameters.dimension),
                               neighbor_offset});
     }
+
     // 阶段一：
     // 利用长边快速找到定位到处于目标向量附件区域的向量
     while (true)
     {
-        auto nearest_offset = waiting_vectors.top().second;
+        auto &nearest_offset = waiting_vectors.top().second;
         auto &nearest_vector = index.vectors[nearest_offset];
+
         for (auto iterator = nearest_vector.long_edge_out.begin(); iterator != nearest_vector.long_edge_out.end();
              ++iterator)
         {
-            auto neighbor_offset = iterator->second;
+            auto &neighbor_offset = iterator->second;
+
             // 计算当前向量的出边指向的向量和目标向量的距离
             if (!visited[neighbor_offset])
             {
@@ -682,11 +700,13 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
                                       neighbor_offset});
             }
         }
+
         if (waiting_vectors.top().second == nearest_offset)
         {
             break;
         }
     }
+
     // 阶段二：
     // 查找与目标向量相似度最高（距离最近）的top-k个向量
     while (!waiting_vectors.empty())
@@ -694,11 +714,12 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
         auto processing_distance = waiting_vectors.top().first;
         auto processing_vector_offset = waiting_vectors.top().second;
         waiting_vectors.pop();
+        auto &processing_vector = index.vectors[processing_vector_offset];
 
         // 如果已遍历的向量小于候选数量
         if (nearest_neighbors.size() < top_k + magnification)
         {
-            nearest_neighbors.push({processing_distance, index.vectors[processing_vector_offset].id});
+            nearest_neighbors.push({processing_distance, processing_vector.id});
         }
         else
         {
@@ -706,7 +727,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
             if (processing_distance < nearest_neighbors.top().first)
             {
                 nearest_neighbors.pop();
-                nearest_neighbors.push({processing_distance, index.vectors[processing_vector_offset].id});
+                nearest_neighbors.push({processing_distance, processing_vector.id});
             }
             else
             {
@@ -714,12 +735,11 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
             }
         }
 
-        auto &processing_vector = index.vectors[processing_vector_offset];
-
         for (auto iterator = processing_vector.short_edge_out.begin();
              iterator != processing_vector.short_edge_out.end(); ++iterator)
         {
             auto &neighbor_offset = iterator->second;
+
             // 计算当前向量的出边指向的向量和目标向量的距离
             if (!visited[neighbor_offset])
             {
@@ -734,6 +754,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
              ++iterator)
         {
             auto &neighbor_offset = *iterator;
+
             // 计算当前向量的出边指向的向量和目标向量的距离
             if (!visited[neighbor_offset])
             {
@@ -748,6 +769,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
              iterator != processing_vector.keep_connected.end(); ++iterator)
         {
             auto &neighbor_offset = *iterator;
+
             // 计算当前向量的出边指向的向量和目标向量的距离
             if (!visited[neighbor_offset])
             {
@@ -758,6 +780,7 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
             }
         }
     }
+
     return nearest_neighbors;
 }
 
@@ -765,11 +788,11 @@ std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const I
 std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const std::vector<float> &query_vector,
                                                        const uint64_t top_k, const uint64_t magnification = 0)
 {
-    if (index.count == 0)
-    {
-        throw std::logic_error("Index is empty. ");
-    }
-    // if (query_vector.size() != index.vectors[0].data.size())
+    // if (index.count == 0)
+    // {
+    //     throw std::logic_error("Index is empty. ");
+    // }
+    // if (query_vector.size() != index.parameters.dimension)
     // {
     //     throw std::invalid_argument("The dimension of target vector is not "
     //                                 "equality with vectors in index. ");
