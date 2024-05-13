@@ -5,15 +5,18 @@
 #include <immintrin.h>
 #include <stdexcept>
 
+namespace Space
+{
+
 // 距离定义
-enum class Distance_Type : uint64_t
+enum class Metric : uint64_t
 {
     Euclidean2,
     Inner_Product,
     Cosine_Similarity
 };
 
-namespace euclidean2
+namespace Euclidean2
 {
 
 inline float distance_to_zero(const float *vector1, const uint64_t dimension)
@@ -152,9 +155,9 @@ inline float distance(const float *vector1, const float *vector2, const uint64_t
 #endif
 }
 
-} // namespace euclidean2
+} // namespace Euclidean2
 
-namespace cosine_similarity
+namespace Cosine
 {
 
 inline float distance(const float *vector1, const float *vector2, const uint64_t dimension)
@@ -262,17 +265,19 @@ inline float distance(const float *vector1, const float *vector2, const uint64_t
 #endif
 }
 
-} // namespace cosine_similarity
+} // namespace Cosine
 
-inline auto get_distance_calculation_function(Distance_Type distance)
+inline auto get_similarity(const Metric space)
 {
-    switch (distance)
+    switch (space)
     {
-    case Distance_Type::Euclidean2:
-        return euclidean2::distance;
-    case Distance_Type::Cosine_Similarity:
-        return cosine_similarity::distance;
+    case Metric::Euclidean2:
+        return Euclidean2::distance;
+    case Metric::Cosine_Similarity:
+        return Cosine::distance;
     default:
         throw std::logic_error("for now, we only support 'Euclidean2', 'Inner Product', 'Cosine Similarity'. ");
     }
 }
+
+} // namespace Space

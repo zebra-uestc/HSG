@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "HSG.h"
-#include "distance.h"
+#include "space.h"
 
 std::vector<std::vector<float>> train;
 std::vector<std::vector<float>> test;
@@ -23,7 +23,7 @@ std::vector<std::vector<float>> get_reference_answer()
         for (auto j = 0; j < neighbors[i].size(); ++j)
         {
             reference_answer[i][j] =
-                euclidean2::distance(test[i].data(), train[neighbors[i][j]].data(), train[0].size());
+                Space::Euclidean2::distance(test[i].data(), train[neighbors[i][j]].data(), train[0].size());
         }
     }
     return reference_answer;
@@ -35,7 +35,7 @@ uint64_t verify(const uint64_t t, std::priority_queue<std::pair<float, uint64_t>
     while (!query_result.empty())
     {
         result[query_result.size() - 1] =
-            euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
+            Space::Euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
         query_result.pop();
     }
     uint64_t hit = 0;
@@ -127,7 +127,7 @@ void base_test(uint64_t short_edge_bound, uint64_t build_magnification, float pr
     }
     test_result << "]" << std::endl;
 
-    HSG::Index index(Distance_Type::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
+    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
                      prune_coefficient);
 
     for (auto i = 0; i < train.size(); ++i)
