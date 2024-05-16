@@ -3,7 +3,6 @@
 #include <format>
 #include <fstream>
 #include <iostream>
-#include <semaphore>
 #include <thread>
 #include <vector>
 

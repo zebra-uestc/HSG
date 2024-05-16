@@ -19,7 +19,7 @@ namespace Space
     namespace Euclidean2
     {
 
-        inline float distance_to_zero(const float *vector1, const uint64_t dimension)
+        inline float zero(const float *vector1, const uint64_t dimension)
         {
 #if defined(__AVX512F__)
             auto *vector1_pointer = vector1;

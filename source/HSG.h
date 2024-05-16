@@ -2,7 +2,6 @@
 
 #include <map>
 #include <queue>
-#include <random>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -107,18 +106,32 @@ namespace HSG
         return index.id_to_offset.find(id)->second;
     }
 
+    inline bool reachable(const Vector &vector)
+    {
+        if (vector.offset == 0)
+        {
+            return true;
+        }
+        else if (vector.long_edge_in.empty())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     // 查询距离目标向量最近的k个向量
     // k = index.parameters.short_edge_lower_limit
     // 返回最近邻和不属于最近邻但是在路径上的顶点
-    void search_add(const Index &index, const float *const target_vector,
-                    std::vector<std::pair<float, uint64_t>> &long_path,
-                    std::vector<std::pair<float, uint64_t>> &short_path,
-                    std::priority_queue<std::pair<float, uint64_t>> &nearest_neighbors)
+    inline void search_add(const Index &index, const float *const target_vector,
+                           std::vector<std::pair<float, uint64_t>> &long_path,
+                           std::vector<std::pair<float, uint64_t>> &short_path,
+                           std::priority_queue<std::pair<float, uint64_t>> &nearest_neighbors)
     {
         // 等待队列
         auto waiting_vectors =
             std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
-        waiting_vectors.push({Space::Euclidean2::distance_to_zero(target_vector, index.parameters.dimension), 0});
+        waiting_vectors.push({Space::Euclidean2::zero(target_vector, index.parameters.dimension), 0});
 
         // 标记是否被遍历过
         auto visited = std::vector<bool>(index.vectors.size(), false);
@@ -285,9 +298,21 @@ namespace HSG
                 }
             }
         }
+
+        // 去重
+        // long_path 和 short_path 中可能有 nearest_neighbors 中的顶点，将它们删除
+        auto &farest_neighbor_distance = nearest_neighbors.top().first;
+        while (!short_path.empty() && short_path.back().second <= farest_neighbor_distance)
+        {
+            short_path.pop_back();
+        }
+        while (!long_path.empty() && long_path.back().second <= farest_neighbor_distance)
+        {
+            long_path.pop_back();
+        }
     }
 
-    bool connected(const Index &index, const Vector &vector, uint64_t offset)
+    inline bool connected(const Index &index, const Vector &vector, uint64_t offset)
     {
         auto visited = std::vector<bool>(index.vectors.size(), false);
         visited[vector.offset] = true;
@@ -334,20 +359,20 @@ namespace HSG
                     }
                 }
             }
-        }
 
-        if (visited[offset])
-        {
-            return true;
+            if (visited[offset])
+            {
+                return true;
+            }
         }
 
         return false;
     }
 
     // 添加
-    void add(Index &index, const uint64_t id, const float *const added_vector_data)
+    inline void add(Index &index, const uint64_t id, const float *const added_vector_data)
     {
-        auto offset = uint64_t(index.count);
+        auto offset = uint64_t(index.vectors.size());
         // 索引中向量数量加一
         ++index.count;
 
@@ -366,6 +391,7 @@ namespace HSG
 
         index.id_to_offset.insert({id, offset});
         auto &new_vector = index.vectors[offset];
+
         // 搜索距离新增向量最近的index.parameters.short_edge_lower_limit个向量
         // 同时记录搜索过程中遇到的向量
         auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
@@ -398,24 +424,46 @@ namespace HSG
             else if (distance < neighbor.short_edge_out.rbegin()->first)
             {
                 auto farest_distance = neighbor.short_edge_out.rbegin()->first;
-                auto farest_offset = neighbor.short_edge_out.rbegin()->second;
+                auto &temporary = index.vectors[neighbor.short_edge_out.rbegin()->second];
+                auto &farest_offset = temporary.offset;
 
                 // 邻居向量删除距离最大的出边
                 neighbor.short_edge_out.erase(std::prev(neighbor.short_edge_out.end()));
-
-                auto &temporary = index.vectors[farest_offset];
                 temporary.short_edge_in.erase(neighbor.offset);
 
-                if (!neighbor.short_edge_in.contains(farest_offset) && !connected(index, neighbor, farest_offset))
+                if (!neighbor.short_edge_in.contains(farest_offset))
                 {
-                    if (neighbor.short_edge_out.size() < index.parameters.short_edge_upper_limit)
+                    // 添加一条长边
+                    if (connected(index, neighbor, farest_offset))
                     {
-                        neighbor.short_edge_out.insert({farest_distance, farest_offset});
+                        // temporary reachable
+                        auto TR = reachable(temporary);
+
+                        // neighbor reachable
+                        auto NR = reachable(neighbor);
+
+                        if (NR && !TR)
+                        {
+                            neighbor.long_edge_out.insert({farest_distance, farest_offset});
+                            temporary.long_edge_in.insert({neighbor.offset, farest_distance});
+                        }
+                        else if (TR && !NR)
+                        {
+                            temporary.long_edge_out.insert({farest_distance, neighbor.offset});
+                            neighbor.long_edge_in.insert({farest_offset, farest_distance});
+                        }
                     }
                     else
                     {
-                        neighbor.keep_connected.insert(farest_offset);
-                        temporary.keep_connected.insert(neighbor.offset);
+                        if (neighbor.short_edge_out.size() < index.parameters.short_edge_upper_limit)
+                        {
+                            neighbor.short_edge_out.insert({farest_distance, farest_offset});
+                        }
+                        else
+                        {
+                            neighbor.keep_connected.insert(farest_offset);
+                            temporary.keep_connected.insert(neighbor.offset);
+                        }
                     }
                 }
 
@@ -426,10 +474,35 @@ namespace HSG
             }
         }
 
-        // TODO 添加长边
+        // TODO 优化长边添加策略
+        // 可以通过三角形判断新添加的顶点、零点和 long_path 中顶点的关系
         // 添加长边
-        if (index.parameters.cover_range <= short_path.size())
+        if (short_path.size() == index.parameters.cover_range)
         {
+            auto &neighbor_distance = long_path.back().first;
+            auto &neighbor_offset = long_path.back().second;
+            auto &neighbor = index.vectors[neighbor_offset];
+
+            neighbor.long_edge_out.insert({neighbor_distance, offset});
+            new_vector.long_edge_in.insert({neighbor_offset, neighbor_distance});
+        }
+        else if (index.parameters.cover_range < short_path.size())
+        {
+            auto &last_offset = long_path.back().second;
+            auto &last = index.vectors[last_offset];
+
+            for (auto i = index.parameters.cover_range; i < short_path.size(); i += i)
+            {
+                auto &next_offset = long_path.back().second;
+                auto &next = index.vectors[next_offset];
+                auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
+
+                last.long_edge_out.insert({distance, next_offset});
+                next.long_edge_in.insert({last_offset, distance});
+
+                last_offset = next_offset;
+                last = next;
+            }
         }
     }
 
@@ -632,10 +705,8 @@ namespace HSG
     // TODO 先获取要计算的向量再统一计算
     // TODO 预取向量数据
     // 查询距离目标向量最近的top-k个向量
-    std::priority_queue<std::pair<float, uint64_t>> nearest_neighbors_search(const Index &index,
-                                                                             const float *const target_vector,
-                                                                             const uint64_t top_k,
-                                                                             const uint64_t magnification)
+    inline std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const float *const target_vector,
+                                                                  const uint64_t top_k, const uint64_t magnification)
     {
         // 优先队列
         auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
@@ -762,20 +833,22 @@ namespace HSG
     }
 
     // 查询
-    std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const float *const query_vector,
-                                                           const uint64_t top_k, const uint64_t magnification = 0)
-    {
-        // if (index.count == 0)
-        // {
-        //     throw std::logic_error("Index is empty. ");
-        // }
-        // if (query_vector.size() != index.parameters.dimension)
-        // {
-        //     throw std::invalid_argument("The dimension of target vector is not "
-        //                                 "equality with vectors in index. ");
-        // }
-        return nearest_neighbors_search(index, query_vector, top_k, magnification);
-    }
+    // inline std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const float *const
+    // query_vector,
+    //                                                               const uint64_t top_k,
+    //                                                               const uint64_t magnification = 0)
+    // {
+    //     // if (index.count == 0)
+    //     // {
+    //     //     throw std::logic_error("Index is empty. ");
+    //     // }
+    //     // if (query_vector.size() != index.parameters.dimension)
+    //     // {
+    //     //     throw std::invalid_argument("The dimension of target vector is not "
+    //     //                                 "equality with vectors in index. ");
+    //     // }
+    //     return nearest_neighbors(index, query_vector, top_k, magnification);
+    // }
 
     // TODO 计算覆盖率
     // 计算覆盖率
