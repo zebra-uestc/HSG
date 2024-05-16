@@ -99,69 +99,30 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
     return neighbors;
 }
 
-auto available_thread = std::counting_semaphore<>(12);
-auto done_semaphore = std::counting_semaphore<>(1);
-uint64_t done_thread = 0;
-uint64_t done_number = 0;
-auto done = std::counting_semaphore<>(0);
-
-void base_test(uint64_t short_edge_bound, uint64_t build_magnification, float prune_coefficient)
+void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
+               uint64_t build_magnification, uint64_t search_magnification)
 {
-    auto test_result = std::ofstream(
-        std::format("result/milu/{0}-{1}-{2}.txt", short_edge_bound, build_magnification, prune_coefficient),
-        std::ios::app | std::ios::out);
-
-    auto time = std::time(nullptr);
-    auto UTC_time = std::gmtime(&time);
-    test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
-                << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
-
-    test_result << std::format("short edge bound: {0:<4} build magnification: {1:<4} prune_coefficient: {2:<3}",
-                               short_edge_bound, build_magnification, prune_coefficient)
-                << std::endl;
-    auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50};
-    test_result << "search_magnifications: [" << search_magnifications[0];
-    for (auto i = 1; i < search_magnifications.size(); ++i)
-    {
-        test_result << ", " << search_magnifications[i];
-    }
-    test_result << "]" << std::endl;
-
-    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
-                     prune_coefficient);
+    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
+                     cover_range, build_magnification);
 
     for (auto i = 0; i < train.size(); ++i)
     {
-        HSG::add(index, i, train[i]);
+        HSG::add(index, i, train[i].data());
     }
 
-    for (auto i = 0; i < search_magnifications.size(); ++i)
+    uint64_t total_hit = 0;
+    uint64_t total_time = 0;
+    for (auto i = 0; i < test.size(); ++i)
     {
-        auto search_magnification = search_magnifications[i];
-        uint64_t total_hit = 0;
-        uint64_t total_time = 0;
-        for (auto i = 0; i < test.size(); ++i)
-        {
-            auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::search(index, test[i], neighbors[i].size(), search_magnification);
-            auto end = std::chrono::high_resolution_clock::now();
-            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(i, query_result);
-            total_hit += hit;
-        }
-        test_result << std::format("total hit: {0:<13} average time: {1:<13}us", total_hit, total_time / test.size())
-                    << std::endl;
+        auto begin = std::chrono::high_resolution_clock::now();
+        auto query_result = HSG::search(index, test[i].data(), neighbors[i].size(), search_magnification);
+        auto end = std::chrono::high_resolution_clock::now();
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        auto hit = verify(i, query_result);
+        total_hit += hit;
     }
-
-    test_result.close();
-    done_semaphore.acquire();
-    ++done_thread;
-    if (done_thread == done_number)
-    {
-        done.release();
-    }
-    done_semaphore.release();
-    available_thread.release();
+    std::cout << std::format("total hit: {0:<13} average time: {1:<13}us", total_hit, total_time / test.size())
+              << std::endl;
 }
 
 int main(int argc, char **argv)
@@ -182,26 +143,12 @@ int main(int argc, char **argv)
     neighbors = load_neighbors(argv[3]);
     reference_answer = get_reference_answer();
 
-    auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 24, 32};
-    auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50};
-    auto prune_coefficients = std::vector<float>{1, 1.1, 1.3, 1.6, 2};
-    done_number += short_edge_bounds.size() * build_magnifications.size() * prune_coefficients.size();
-    for (auto i = 0; i < short_edge_bounds.size(); ++i)
-    {
-        auto short_edge_bound = short_edge_bounds[i];
-        for (auto j = 0; j < build_magnifications.size(); ++j)
-        {
-            auto build_magnification = build_magnifications[j];
-            for (auto k = 0; k < prune_coefficients.size(); ++k)
-            {
-                auto prune_coefficient = prune_coefficients[k];
-                available_thread.acquire();
-                auto one_thread = std::thread(base_test, short_edge_bound, build_magnification, prune_coefficient);
-                one_thread.detach();
-            }
-        }
-    }
+    auto short_edge_lower_limit = std::stoull(argv[4]);
+    auto short_edge_upper_limit = std::stoull(argv[5]);
+    auto cover_range = std::stoull(argv[6]);
+    auto build_magnification = std::stoull(argv[7]);
+    auto search_magnification = std::stoull(argv[8]);
+    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, search_magnification);
 
-    done.acquire();
     return 0;
 }

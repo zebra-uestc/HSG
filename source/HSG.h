@@ -61,10 +61,11 @@ namespace HSG
 
         explicit Index_Parameters(const uint64_t dimension, const Space::Metric space_metric,
                                   const uint64_t magnification, const uint64_t short_edge_lower_limit,
-                                  const uint64_t cover_range)
+                                  const uint64_t short_edge_upper_limit, const uint64_t cover_range)
             : dimension(dimension), space_metric(space_metric), magnification(magnification),
               termination_number(short_edge_lower_limit + magnification),
-              short_edge_lower_limit(short_edge_lower_limit), cover_range(cover_range)
+              short_edge_lower_limit(short_edge_lower_limit), short_edge_upper_limit(short_edge_upper_limit),
+              cover_range(cover_range)
         {
         }
     };
@@ -92,9 +93,9 @@ namespace HSG
         std::unordered_map<uint64_t, uint64_t> id_to_offset;
 
         explicit Index(const Space::Metric space, const uint64_t dimension, const uint64_t short_edge_lower_limit,
-                       const uint64_t magnification, const uint64_t cover_range)
-            : parameters(dimension, space, magnification, short_edge_lower_limit, cover_range), count(1),
-              similarity(Space::get_similarity(space)), zero(dimension, 0.0)
+                       const uint64_t short_edge_upper_limit, const uint64_t cover_range, const uint64_t magnification)
+            : parameters(dimension, space, magnification, short_edge_lower_limit, short_edge_upper_limit, cover_range),
+              count(1), similarity(Space::get_similarity(space)), zero(dimension, 0.0)
         {
             this->vectors.push_back(Vector(std::numeric_limits<uint64_t>::max(), 0, this->zero.data()));
             this->id_to_offset.insert({std::numeric_limits<uint64_t>::max(), 0});
@@ -438,14 +439,16 @@ namespace HSG
     // {
     //     auto &removed_vector = index.vectors.find(removed_vector_id)->second;
     //     // 删除短边的出边
-    //     for (auto iterator = removed_vector.short_edge_out.begin(); iterator != removed_vector.short_edge_out.end();
+    //     for (auto iterator = removed_vector.short_edge_out.begin(); iterator !=
+    //     removed_vector.short_edge_out.end();
     //          ++iterator)
     //     {
     //         auto &neighbor_id = iterator->second;
     //         index.vectors.find(neighbor_id)->second.short_edge_in.erase(removed_vector_id);
     //     }
     //     // 删除短边的入边
-    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator != removed_vector.short_edge_in.end();
+    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator !=
+    //     removed_vector.short_edge_in.end();
     //          ++iterator)
     //     {
     //         auto &neighbor_id = iterator->first;
@@ -460,7 +463,8 @@ namespace HSG
     //         vector.short_edge_out.erase(temporary);
     //     }
     //     // 补一条边
-    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator != removed_vector.short_edge_in.end();
+    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator !=
+    //     removed_vector.short_edge_in.end();
     //          ++iterator)
     //     {
     //         auto &repaired_id = iterator->first;
@@ -473,8 +477,8 @@ namespace HSG
     //             auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
     //             // 排队队列
     //             auto waiting_vectors = std::priority_queue<std::pair<float, uint64_t>,
-    //                                                        std::vector<std::pair<float, uint64_t>>,
-    //                                                        std::greater<>>();
+    //                                                        std::vector<std::pair<float,
+    //                                                        uint64_t>>, std::greater<>>();
     //             for (auto temporary = repaired_vector.short_edge_out.begin();
     //                  temporary != repaired_vector.short_edge_out.end(); ++iterator)
     //             {
@@ -562,7 +566,8 @@ namespace HSG
     //     }
     //     // 处理长边
     //     // 删除出边
-    //     for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+    //     for (auto iterator = removed_vector.long_edge_out.begin(); iterator !=
+    //     removed_vector.long_edge_out.end();
     //          ++iterator)
     //     {
     //         auto &neighbor_id = iterator->second;
@@ -570,7 +575,8 @@ namespace HSG
     //     }
     //     // 计算分母
     //     float sum = 0;
-    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator !=
+    //     removed_vector.long_edge_in.end();
     //     ++iterator)
     //     {
     //         auto &distance = iterator->second;
@@ -584,7 +590,8 @@ namespace HSG
     //     std::mt19937 mt19937_generator(random_device_generator());
     //     // 均匀分布
     //     std::uniform_real_distribution<float> distribution(0, sum);
-    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator !=
+    //     removed_vector.long_edge_in.end();
     //     ++iterator)
     //     {
     //         auto &repaired_id = iterator->first;
@@ -608,7 +615,8 @@ namespace HSG
     //             if (distribution(mt19937_generator) < in_edge_distance)
     //             {
     //                 auto &new_long_edge = index.vectors.find(new_long_edge_id)->second;
-    //                 auto distance = index.similarity(repaired_vector.data.data(), new_long_edge.data.data(),
+    //                 auto distance = index.similarity(repaired_vector.data.data(),
+    //                 new_long_edge.data.data(),
     //                                                            index.parameters.dimension);
     //                 if (!prune(index, repaired_vector, new_long_edge, distance))
     //                 {
