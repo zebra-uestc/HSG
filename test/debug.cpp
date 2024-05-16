@@ -18,6 +18,7 @@ std::vector<std::vector<float>> reference_answer;
 std::vector<std::vector<float>> get_reference_answer()
 {
     auto reference_answer = std::vector<std::vector<float>>(test.size(), std::vector<float>(neighbors[0].size(), 0));
+
     for (auto i = 0; i < test.size(); ++i)
     {
         for (auto j = 0; j < neighbors[i].size(); ++j)
@@ -26,19 +27,23 @@ std::vector<std::vector<float>> get_reference_answer()
                 Space::Euclidean2::distance(test[i].data(), train[neighbors[i][j]].data(), train[0].size());
         }
     }
+
     return reference_answer;
 }
 
 uint64_t verify(const uint64_t t, std::priority_queue<std::pair<float, uint64_t>> &query_result)
 {
     auto result = std::vector<float>(query_result.size(), 0);
+
     while (!query_result.empty())
     {
         result[query_result.size() - 1] =
             Space::Euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
         query_result.pop();
     }
+
     uint64_t hit = 0;
+
     for (auto distance : reference_answer[t])
     {
         if (result[hit] <= distance)
@@ -46,6 +51,7 @@ uint64_t verify(const uint64_t t, std::priority_queue<std::pair<float, uint64_t>
             ++hit;
         }
     }
+
     return hit;
 }
 
@@ -53,16 +59,19 @@ std::vector<std::vector<float>> load_vector(const char *file_path)
 {
     std::ifstream vectors_file;
     vectors_file.open(file_path, std::ios::in | std::ios::binary);
+
     if (!vectors_file.is_open())
     {
         std::cout << "open file failed. " << std::endl;
         exit(0);
     }
+
     uint64_t count = 0;
     uint64_t dimension = 0;
     vectors_file.read((char *)&count, sizeof(uint64_t));
     vectors_file.read((char *)&dimension, sizeof(uint64_t));
     auto vectors = std::vector<std::vector<float>>(count, std::vector<float>(dimension, 0));
+
     for (auto i = 0; i < count; ++i)
     {
         for (auto j = 0; j < dimension; ++j)
@@ -70,6 +79,7 @@ std::vector<std::vector<float>> load_vector(const char *file_path)
             vectors_file.read((char *)&vectors[i][j], sizeof(float));
         }
     }
+
     vectors_file.close();
     return vectors;
 }
@@ -78,16 +88,19 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
 {
     std::ifstream neighbors_file;
     neighbors_file.open(file_path, std::ios::in | std::ios::binary);
+
     if (!neighbors_file.is_open())
     {
         std::cout << "open file failed. " << std::endl;
         exit(0);
     }
+
     uint64_t count = 0;
     uint64_t neighbor_count = 0;
     neighbors_file.read((char *)&count, sizeof(uint64_t));
     neighbors_file.read((char *)&neighbor_count, sizeof(uint64_t));
     auto neighbors = std::vector<std::vector<uint64_t>>(count, std::vector<uint64_t>(neighbor_count, 0));
+
     for (auto i = 0; i < count; ++i)
     {
         for (auto j = 0; j < neighbor_count; ++j)
@@ -95,6 +108,7 @@ std::vector<std::vector<uint64_t>> load_neighbors(const char *file_path)
             neighbors_file.read((char *)&neighbors[i][j], sizeof(uint64_t));
         }
     }
+
     neighbors_file.close();
     return neighbors;
 }
@@ -112,6 +126,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
 
     uint64_t total_hit = 0;
     uint64_t total_time = 0;
+
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
@@ -121,6 +136,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         auto hit = verify(i, query_result);
         total_hit += hit;
     }
+
     std::cout << std::format("total hit: {0:<13} average time: {1:<13}us", total_hit, total_time / test.size())
               << std::endl;
 }
@@ -136,6 +152,7 @@ int main(int argc, char **argv)
 #else
     std::cout << "no SIMD supported. " << std::endl;
 #endif
+
     std::cout << "CPU physical units: " << std::thread::hardware_concurrency() << std::endl;
 
     train = load_vector(argv[1]);
@@ -148,6 +165,7 @@ int main(int argc, char **argv)
     auto cover_range = std::stoull(argv[6]);
     auto build_magnification = std::stoull(argv[7]);
     auto search_magnification = std::stoull(argv[8]);
+
     base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, search_magnification);
 
     return 0;
