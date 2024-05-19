@@ -136,7 +136,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         total_hit += hit;
     }
 
-    std::cout << std::format("total hit: {0:<13} average time: {1:<13}us", total_hit, total_time / test.size())
+    std::cout << std::format("total hit: {0:<13} average time(us): {1:<13}", total_hit, total_time / test.size())
               << std::endl;
 }
 

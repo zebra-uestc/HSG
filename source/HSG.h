@@ -49,6 +49,7 @@ namespace HSG
         //
         uint64_t magnification;
         // 插入向量时提前终止条件
+        //
         // termination_number = short_edge_lower_limit + magnification
         uint64_t termination_number;
         // 短边数量下限
@@ -70,8 +71,11 @@ namespace HSG
     };
 
     // 索引
+    //
     // 索引使用零点作为默认起始点
+    //
     // 使用64位无符号整形的最大值作为零点的id
+    //
     // 所以向量的id应大于等于0且小于64位无符号整形的最大值
     class Index
     {
@@ -84,11 +88,11 @@ namespace HSG
         uint64_t count;
         // 索引中的向量
         std::vector<Vector> vectors;
-        //
+        // 记录存放向量的数组中的空位
         std::stack<uint64_t> empty;
-        //
+        // 零点向量
         std::vector<float> zero;
-        //
+        // 记录向量的 id 和 offset 的对应关系
         std::unordered_map<uint64_t, uint64_t> id_to_offset;
 
         explicit Index(const Space::Metric space, const uint64_t dimension, const uint64_t short_edge_lower_limit,
@@ -121,7 +125,9 @@ namespace HSG
     }
 
     // 查询距离目标向量最近的k个向量
+    //
     // k = index.parameters.short_edge_lower_limit
+    //
     // 返回最近邻和不属于最近邻但是在路径上的顶点
     inline void search_add(const Index &index, const float *const target_vector,
                            std::vector<std::pair<float, uint64_t>> &long_path,
@@ -299,9 +305,10 @@ namespace HSG
             }
         }
 
+        auto &farest_neighbor_distance = nearest_neighbors.top().first;
+
         // 去重
         // long_path 和 short_path 中可能有 nearest_neighbors 中的顶点，将它们删除
-        auto &farest_neighbor_distance = nearest_neighbors.top().first;
         while (!short_path.empty() && short_path.back().second <= farest_neighbor_distance)
         {
             short_path.pop_back();
@@ -373,7 +380,6 @@ namespace HSG
     inline void add(Index &index, const uint64_t id, const float *const added_vector_data)
     {
         auto offset = uint64_t(index.vectors.size());
-        // 索引中向量数量加一
         ++index.count;
 
         if (index.empty.empty())
@@ -392,11 +398,12 @@ namespace HSG
         index.id_to_offset.insert({id, offset});
         auto &new_vector = index.vectors[offset];
 
-        // 搜索距离新增向量最近的index.parameters.short_edge_lower_limit个向量
-        // 同时记录搜索过程中遇到的向量
         auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
         auto long_path = std::vector<std::pair<float, uint64_t>>();
         auto short_path = std::vector<std::pair<float, uint64_t>>();
+
+        // 搜索距离新增向量最近的 index.parameters.short_edge_lower_limit 个向量
+        // 同时记录搜索路径
         search_add(index, added_vector_data, long_path, short_path, nearest_neighbors);
 
         // 添加短边
@@ -417,52 +424,55 @@ namespace HSG
             {
                 // 邻居向量添加出边
                 neighbor.short_edge_out.insert({distance, offset});
+
                 // 新向量添加入边
                 new_vector.short_edge_in.insert(neighbor.offset);
             }
-            // 如果新向量距离邻居的距离小于邻居当前距离最大的出边的距离
+            // 如果新向量和邻居的距离小于邻居当前距离最大的出边的距离
             else if (distance < neighbor.short_edge_out.rbegin()->first)
             {
                 auto farest_distance = neighbor.short_edge_out.rbegin()->first;
-                auto &temporary = index.vectors[neighbor.short_edge_out.rbegin()->second];
-                auto &farest_offset = temporary.offset;
+                auto &neighbor_neighbor = index.vectors[neighbor.short_edge_out.rbegin()->second];
+                // neighbor neighbor offset
+                auto &NN_offset = neighbor_neighbor.offset;
 
                 // 邻居向量删除距离最大的出边
                 neighbor.short_edge_out.erase(std::prev(neighbor.short_edge_out.end()));
-                temporary.short_edge_in.erase(neighbor.offset);
+                neighbor_neighbor.short_edge_in.erase(neighbor.offset);
 
-                if (!neighbor.short_edge_in.contains(farest_offset))
+                if (!neighbor.short_edge_in.contains(NN_offset))
                 {
                     // 添加一条长边
-                    if (connected(index, neighbor, farest_offset))
+                    if (connected(index, neighbor, NN_offset))
                     {
-                        // temporary reachable
-                        auto TR = reachable(temporary);
+                        // neighbor neighbor reachable
+                        auto NNR = reachable(neighbor_neighbor);
 
                         // neighbor reachable
                         auto NR = reachable(neighbor);
 
-                        if (NR && !TR)
+                        if (NR && !NNR)
                         {
-                            neighbor.long_edge_out.insert({farest_distance, farest_offset});
-                            temporary.long_edge_in.insert({neighbor.offset, farest_distance});
+                            neighbor.long_edge_out.insert({farest_distance, NN_offset});
+                            neighbor_neighbor.long_edge_in.insert({neighbor.offset, farest_distance});
                         }
-                        else if (TR && !NR)
+                        else if (NNR && !NR)
                         {
-                            temporary.long_edge_out.insert({farest_distance, neighbor.offset});
-                            neighbor.long_edge_in.insert({farest_offset, farest_distance});
+                            neighbor_neighbor.long_edge_out.insert({farest_distance, neighbor.offset});
+                            neighbor.long_edge_in.insert({NN_offset, farest_distance});
                         }
                     }
                     else
                     {
                         if (neighbor.short_edge_out.size() < index.parameters.short_edge_upper_limit)
                         {
-                            neighbor.short_edge_out.insert({farest_distance, farest_offset});
+                            neighbor.short_edge_out.insert({farest_distance, NN_offset});
+                            neighbor_neighbor.short_edge_in.insert(neighbor.offset);
                         }
                         else
                         {
-                            neighbor.keep_connected.insert(farest_offset);
-                            temporary.keep_connected.insert(neighbor.offset);
+                            neighbor.keep_connected.insert(NN_offset);
+                            neighbor_neighbor.keep_connected.insert(neighbor.offset);
                         }
                     }
                 }
@@ -474,9 +484,9 @@ namespace HSG
             }
         }
 
-        // TODO 优化长边添加策略
-        // 可以通过三角形判断新添加的顶点、零点和 long_path 中顶点的关系
         // 添加长边
+        // 简单分为三种情况
+        // 只实现了第一种情况，后两种情况没有单独处理
         if (short_path.size() == index.parameters.cover_range)
         {
             auto &neighbor_distance = long_path.back().first;
@@ -491,9 +501,9 @@ namespace HSG
             auto &last_offset = long_path.back().second;
             auto &last = index.vectors[last_offset];
 
-            for (auto i = index.parameters.cover_range; i < short_path.size(); i += i)
+            for (auto i = index.parameters.cover_range; i < short_path.size(); i += index.parameters.cover_range + 1)
             {
-                auto &next_offset = long_path.back().second;
+                auto &next_offset = short_path[i].second;
                 auto &next = index.vectors[next_offset];
                 auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
 
@@ -702,20 +712,22 @@ namespace HSG
     //     index.vectors.erase(removed_vector_id);
     // }
 
-    // TODO 先获取要计算的向量再统一计算
-    // TODO 预取向量数据
+    // 要做的优化：先获取要计算的顶点再统一计算，这样可以手动预取向量数据
     // 查询距离目标向量最近的top-k个向量
     inline std::priority_queue<std::pair<float, uint64_t>> search(const Index &index, const float *const target_vector,
                                                                   const uint64_t top_k, const uint64_t magnification)
     {
         // 优先队列
         auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
+
         // 标记是否被遍历过
         auto visited = std::vector<bool>(index.vectors.size(), false);
         visited[0] = true;
+
         // 排队队列
         auto waiting_vectors =
             std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
+
         auto &zero_vector = index.vectors[0];
 
         for (auto iterator = zero_vector.long_edge_out.begin(); iterator != zero_vector.long_edge_out.end(); ++iterator)
@@ -727,7 +739,7 @@ namespace HSG
                  neighbor_offset});
         }
 
-        // 阶段一：
+        // 阶段一
         // 利用长边快速找到定位到处于目标向量附件区域的向量
         while (true)
         {
@@ -755,7 +767,7 @@ namespace HSG
             }
         }
 
-        // 阶段二：
+        // 阶段二
         // 查找与目标向量相似度最高（距离最近）的top-k个向量
         while (!waiting_vectors.empty())
         {
