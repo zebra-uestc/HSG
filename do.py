@@ -96,4 +96,4 @@ elif args.performance_test:
         print("please download the data set and extract data.")
 elif args.clear:
     os.system("rm -rf build")
-    os.system("rm -rf binary")
+    # os.system("rm -rf binary")
