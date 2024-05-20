@@ -42,18 +42,40 @@ def get_mixed_indices(neighbors, train_size, k):
     non_neighbors_sample = np.random.choice(list(non_neighbors_indices), size=k//2, replace=False)
     # 创建一个空数组用于存储邻居索引
     neighbors_sample = np.empty((0))
+
     # 从neighbors里选取k/2个索引
-    # 对每一行进行操作，从第一行开始，选取90个元素，保证每行至少留有10个索引
-    for row in neighbors:
-        # 确保每行至少留有十个未被抽取的元素，最后一次抽取（个数小于90）保证所有被抽取的索引个数达到k/2个
-        num_elements = min(len(row) - 10, int(k / 2 - len(neighbors_sample)))
-        if num_elements > 0:
-            # 随机选择num_elements个元素
-            selected_row = np.random.choice(list(row), num_elements)
-            # 将选择的元素添加到列表中
-            neighbors_sample = np.concatenate((neighbors_sample,selected_row))
-            # 使用np.unique函数去除重复元素
-            neighbors_sample = np.unique(neighbors_sample)
+    # 存储所有被抽到的元素
+    element_list = []
+    # 已经抽取的元素总个数
+    sum = 0
+    # 记录每行剩余的元素个数
+    array = np.full(neighbors.shape[0],neighbors.shape[1])
+    # 开始抽取元素
+    while(sum < k/2 and np.all(array >= 10)):
+        willApend = True
+        # 从所有元素中随机抽取一个
+        selected_element = np.random.choice(list(neighbors_set), size=1,replace=False)
+        data_choie = int(selected_element.item())
+        # 在neighbors集中，找到该被抽取到的元素所在行
+        rows, _ = np.where(neighbors == data_choie)
+        # 如果被抽取的元素之前被抽到过，则重新选择
+        if data_choie in element_list:
+            willApend = False
+        # 选出的元素使得至少有一行剩余元素少于10个，则重新选择
+        for row in rows:
+            if(array[row] - 1 < 10):
+                willApend = False
+        # 如果抽取的元素有效，则添加进列表
+        if(willApend):
+            # 添加进抽取元素列表
+            element_list.append(data_choie)
+            # 列表元素个数加一
+            sum += 1
+            # 所在行元素个数减一
+            for row in rows:
+                array[row] -= 1
+    # 将列表转换为np数组
+    neighbors_sample = np.array(element_list)
     # 合并两个样本以得到混合的索引
     mixed_indices = np.concatenate([non_neighbors_sample, neighbors_sample])
     # 保存为二进制文件
@@ -68,18 +90,36 @@ def get_mixed_indices(neighbors, train_size, k):
     '''
     return mixed_indices
 
+
+def half_of_topk_indices(neighbors, train_size,k):
+    # 创建一个空数组用于存储邻居索引
+    half_of_topk_indices = np.empty((0))
+    # 存储所有被抽到的元素
+    element_list = []
+    # 已经抽取的元素总个数
+    sum = 0
+    # 记录每行剩余的元素个数
+    array = np.full(neighbors.shape[0],neighbors.shape[1])
+    # 开始抽取元素
+
+    # 将列表转换为np数组
+    neighbors_sample = np.array(element_list)
+    # 保存为二进制文件
+    with open('mixed_indices.bin', 'wb') as f:
+        f.write(mixed_indices.tobytes())
+    print("二进制文件保存成功...\n")
+    '''
+    加载二进制文件，恢复为原来的数组
+    with open('mixed_indices.bin', 'rb') as f:
+        loaded_indices = np.frombuffer(f.read(), dtype=non_neighbors_indices.dtype)
+    print("加载完毕")
+    '''
+    return half_of_topk_indices
+
 k = 100
 # # 调用dataset_transform函数，将HDF5文件的内容转换为训练集、测试集和邻居集
 f = h5py.File('sift-128-euclidean.hdf5', 'r')
 train, test, neighbors = dataset_transform(f)
-'''
-# print(neighbors[0])
-# print("数据类型",type(neighbors))          #打印数组数据类型
-# print("数组元素数据类型：",neighbors.dtype)  #打印数组元素数据类型
-# print("数组元素总数：",neighbors.size)      #打印数组尺寸，即数组元素总数
-# print("数组形状：",neighbors.shape)         #打印数组形状
-# print("数组的维度数目",neighbors.ndim)      #打印数组的维度数目
-'''
 # 找出在neighbors中没有出现过的索引
 non_neighbors_indices = get_non_neighbors_indices(neighbors, len(train), k)
 # k/2个非邻居索引，k/2个邻居索引
