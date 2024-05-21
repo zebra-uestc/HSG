@@ -1,7 +1,9 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <queue>
+#include <random>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
@@ -25,7 +27,7 @@ namespace HSG
         // 短的出边
         std::multimap<float, uint64_t> short_edge_out;
         // 短的入边
-        std::unordered_set<uint64_t> short_edge_in;
+        std::unordered_map<uint64_t, float> short_edge_in;
         // 长的出边
         std::multimap<float, uint64_t> long_edge_out;
         // 长的入边
@@ -124,6 +126,115 @@ namespace HSG
         return true;
     }
 
+    inline void delete_vector(Vector &vector)
+    {
+        vector.keep_connected.clear();
+        vector.long_edge_in.clear();
+        vector.long_edge_out.clear();
+        vector.short_edge_in.clear();
+        vector.short_edge_out.clear();
+    }
+
+    inline void visit_LEO_first_time(
+        const Index &index, const Vector &processing_vector, const float *target_vector, std::vector<bool> &visited,
+        std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>
+            &waiting_vectors)
+    {
+        for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+            visited[neighbor_offset] = true;
+            waiting_vectors.push(
+                {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                 neighbor_offset});
+        }
+    }
+
+    inline void visit_LEO(const Index &index, const Vector &processing_vector, const float *target_vector,
+                          std::vector<bool> &visited,
+                          std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
+                                              std::greater<>> &waiting_vectors)
+    {
+        for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+        }
+    }
+
+    inline void visit_SEO(const Index &index, const Vector &processing_vector, const float *target_vector,
+                          std::vector<bool> &visited,
+                          std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
+                                              std::greater<>> &waiting_vectors)
+    {
+        for (auto iterator = processing_vector.short_edge_out.begin();
+             iterator != processing_vector.short_edge_out.end(); ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+        }
+    }
+
+    inline void visit_SEI(const Index &index, const Vector &processing_vector, const float *target_vector,
+                          std::vector<bool> &visited,
+                          std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
+                                              std::greater<>> &waiting_vectors)
+    {
+        for (auto iterator = processing_vector.short_edge_in.begin(); iterator != processing_vector.short_edge_in.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+        }
+    }
+
+    inline void visit_KC(const Index &index, const Vector &processing_vector, const float *target_vector,
+                         std::vector<bool> &visited,
+                         std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>,
+                                             std::greater<>> &waiting_vectors)
+    {
+        for (auto iterator = processing_vector.keep_connected.begin();
+             iterator != processing_vector.keep_connected.end(); ++iterator)
+        {
+            auto &neighbor_offset = *iterator;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+        }
+    }
+
     // 查询距离目标向量最近的k个向量
     //
     // k = index.parameters.short_edge_lower_limit
@@ -151,20 +262,7 @@ namespace HSG
             auto &processing_vector = index.vectors[processing_offset];
             long_path.push_back(waiting_vectors.top());
 
-            for (auto iterator = processing_vector.long_edge_out.begin();
-                 iterator != processing_vector.long_edge_out.end(); ++iterator)
-            {
-                auto &neighbor_offset = iterator->second;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
+            visit_LEO(index, processing_vector, target_vector, visited, waiting_vectors);
 
             if (processing_offset == waiting_vectors.top().second)
             {
@@ -179,50 +277,9 @@ namespace HSG
             auto &processing_offset = waiting_vectors.top().second;
             auto &processing_vector = index.vectors[processing_offset];
 
-            for (auto iterator = processing_vector.short_edge_out.begin();
-                 iterator != processing_vector.short_edge_out.end(); ++iterator)
-            {
-                auto &neighbor_offset = iterator->second;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.short_edge_in.begin();
-                 iterator != processing_vector.short_edge_in.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.keep_connected.begin();
-                 iterator != processing_vector.keep_connected.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
+            visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
 
             if (processing_offset == waiting_vectors.top().second)
             {
@@ -260,49 +317,9 @@ namespace HSG
                 }
             }
 
-            for (auto iterator = processing_vector.short_edge_out.begin();
-                 iterator != processing_vector.short_edge_out.end(); ++iterator)
-            {
-                auto &neighbor_offset = iterator->second;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.short_edge_in.begin();
-                 iterator != processing_vector.short_edge_in.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.keep_connected.begin();
-                 iterator != processing_vector.keep_connected.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
+            visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
         }
 
         auto &farest_neighbor_distance = nearest_neighbors.top().first;
@@ -335,7 +352,7 @@ namespace HSG
 
                 for (auto iterator = t.short_edge_in.begin(); iterator != t.short_edge_in.end(); ++iterator)
                 {
-                    auto &t1 = *iterator;
+                    auto &t1 = iterator->first;
 
                     if (!visited[t1])
                     {
@@ -417,7 +434,7 @@ namespace HSG
             new_vector.short_edge_out.insert({distance, neighbor.offset});
 
             // 为邻居向量添加入边
-            neighbor.short_edge_in.insert(offset);
+            neighbor.short_edge_in.insert({offset, distance});
 
             // 如果邻居向量的出边小于短边下限
             if (neighbor.short_edge_out.size() < index.parameters.short_edge_lower_limit)
@@ -426,7 +443,7 @@ namespace HSG
                 neighbor.short_edge_out.insert({distance, offset});
 
                 // 新向量添加入边
-                new_vector.short_edge_in.insert(neighbor.offset);
+                new_vector.short_edge_in.insert({neighbor.offset, distance});
             }
             // 如果新向量和邻居的距离小于邻居当前距离最大的出边的距离
             else if (distance < neighbor.short_edge_out.rbegin()->first)
@@ -467,7 +484,7 @@ namespace HSG
                         if (neighbor.short_edge_out.size() < index.parameters.short_edge_upper_limit)
                         {
                             neighbor.short_edge_out.insert({farest_distance, NN_offset});
-                            neighbor_neighbor.short_edge_in.insert(neighbor.offset);
+                            neighbor_neighbor.short_edge_in.insert({neighbor.offset, farest_distance});
                         }
                         else
                         {
@@ -480,7 +497,7 @@ namespace HSG
                 // 邻居向量添加出边
                 neighbor.short_edge_out.insert({distance, offset});
                 // 新向量添加入边
-                new_vector.short_edge_in.insert(neighbor.offset);
+                new_vector.short_edge_in.insert({neighbor.offset, distance});
             }
         }
 
@@ -516,201 +533,374 @@ namespace HSG
         }
     }
 
-    // TODO 删除
     // 删除索引中的向量
-    // void erase(Index &index, const uint64_t removed_vector_id)
-    // {
-    //     auto &removed_vector = index.vectors.find(removed_vector_id)->second;
-    //     // 删除短边的出边
-    //     for (auto iterator = removed_vector.short_edge_out.begin(); iterator !=
-    //     removed_vector.short_edge_out.end();
-    //          ++iterator)
-    //     {
-    //         auto &neighbor_id = iterator->second;
-    //         index.vectors.find(neighbor_id)->second.short_edge_in.erase(removed_vector_id);
-    //     }
-    //     // 删除短边的入边
-    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator !=
-    //     removed_vector.short_edge_in.end();
-    //          ++iterator)
-    //     {
-    //         auto &neighbor_id = iterator->first;
-    //         auto &distance = iterator->second;
-    //         auto &vector = index.vectors.find(neighbor_id)->second;
-    //         // 删除边
-    //         auto temporary = vector.short_edge_out.find(distance);
-    //         while (temporary->second != removed_vector_id)
-    //         {
-    //             ++temporary;
-    //         }
-    //         vector.short_edge_out.erase(temporary);
-    //     }
-    //     // 补一条边
-    //     for (auto iterator = removed_vector.short_edge_in.begin(); iterator !=
-    //     removed_vector.short_edge_in.end();
-    //          ++iterator)
-    //     {
-    //         auto &repaired_id = iterator->first;
-    //         // 需要补边的向量
-    //         auto &repaired_vector = index.vectors.find(repaired_id)->second;
-    //         {
-    //             // 记录被遍历过得向量
-    //             auto visited = std::vector<bool>(index.vectors.size(), false);
-    //             // 优先队列
-    //             auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
-    //             // 排队队列
-    //             auto waiting_vectors = std::priority_queue<std::pair<float, uint64_t>,
-    //                                                        std::vector<std::pair<float,
-    //                                                        uint64_t>>, std::greater<>>();
-    //             for (auto temporary = repaired_vector.short_edge_out.begin();
-    //                  temporary != repaired_vector.short_edge_out.end(); ++iterator)
-    //             {
-    //                 waiting_vectors.push(*temporary);
-    //                 visited.insert(temporary->second);
-    //             }
-    //             while (!waiting_vectors.empty())
-    //             {
-    //                 auto processing_distance = waiting_vectors.top().first;
-    //                 auto processing_vector_id = waiting_vectors.top().second;
-    //                 auto &processing_vector = index.vectors.find(processing_vector_id)->second;
-    //                 waiting_vectors.pop();
-    //                 // 如果已遍历的向量小于候选数量
-    //                 if (nearest_neighbors.size() < index.parameters.magnification)
-    //                 {
-    //                     nearest_neighbors.push({processing_distance, processing_vector_id});
-    //                 }
-    //                 else
-    //                 {
-    //                     // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
-    //                     if (processing_distance < nearest_neighbors.top().first)
-    //                     {
-    //                         nearest_neighbors.pop();
-    //                         nearest_neighbors.push({processing_distance, processing_vector_id});
-    //                     }
-    //                     else
-    //                     {
-    //                         break;
-    //                     }
-    //                 }
-    //                 for (auto iterator = processing_vector.short_edge_out.begin();
-    //                      iterator != processing_vector.short_edge_out.end(); ++iterator)
-    //                 {
-    //                     auto neighbor_id = iterator->second;
-    //                     // 计算当前向量的出边指向的向量和目标向量的距离
-    //                     if (!visited.contains(neighbor_id))
-    //                     {
-    //                         visited.insert(neighbor_id);
-    //                         waiting_vectors.push(
-    //                             {index.similarity(repaired_vector.data.data(),
-    //                                                         index.vectors.find(neighbor_id)->second.data.data(),
-    //                                                         index.parameters.dimension),
-    //                              neighbor_id});
-    //                     }
-    //                 }
-    //                 for (auto iterator = processing_vector.short_edge_in.begin();
-    //                      iterator != processing_vector.short_edge_in.end(); ++iterator)
-    //                 {
-    //                     auto neighbor_id = iterator->first;
-    //                     // 计算当前向量的出边指向的向量和目标向量的距离
-    //                     if (!visited.contains(neighbor_id))
-    //                     {
-    //                         visited.insert(neighbor_id);
-    //                         waiting_vectors.push(
-    //                             {index.similarity(repaired_vector.data.data(),
-    //                                                         index.vectors.find(neighbor_id)->second.data.data(),
-    //                                                         index.parameters.dimension),
-    //                              neighbor_id});
-    //                     }
-    //                 }
-    //                 for (auto iterator = processing_vector.keep_connected.begin();
-    //                      iterator != processing_vector.keep_connected.end(); ++iterator)
-    //                 {
-    //                     auto neighbor_id = *iterator;
-    //                     // 计算当前向量的出边指向的向量和目标向量的距离
-    //                     if (!visited.contains(neighbor_id))
-    //                     {
-    //                         visited.insert(neighbor_id);
-    //                         waiting_vectors.push(
-    //                             {index.similarity(repaired_vector.data.data(),
-    //                                                         index.vectors.find(neighbor_id)->second.data.data(),
-    //                                                         index.parameters.dimension),
-    //                              neighbor_id});
-    //                     }
-    //                 }
-    //             }
-    //             while (nearest_neighbors.size() != 1)
-    //             {
-    //                 nearest_neighbors.pop();
-    //             }
-    //             repaired_vector.short_edge_out.insert(nearest_neighbors.top());
-    //             index.vectors.find(nearest_neighbors.top().second)
-    //                 ->second.short_edge_in.insert({repaired_id, nearest_neighbors.top().first});
-    //         }
-    //     }
-    //     // 处理长边
-    //     // 删除出边
-    //     for (auto iterator = removed_vector.long_edge_out.begin(); iterator !=
-    //     removed_vector.long_edge_out.end();
-    //          ++iterator)
-    //     {
-    //         auto &neighbor_id = iterator->second;
-    //         index.vectors.find(neighbor_id)->second.long_edge_in.erase(removed_vector_id);
-    //     }
-    //     // 计算分母
-    //     float sum = 0;
-    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator !=
-    //     removed_vector.long_edge_in.end();
-    //     ++iterator)
-    //     {
-    //         auto &distance = iterator->second;
-    //         sum += distance;
-    //     }
-    //     // 删除入边并补边
-    //     // 真随机数生成器
-    //     std::random_device random_device_generator;
-    //     // 伪随机数生成器
-    //     // 用真随机数生成器初始化
-    //     std::mt19937 mt19937_generator(random_device_generator());
-    //     // 均匀分布
-    //     std::uniform_real_distribution<float> distribution(0, sum);
-    //     for (auto iterator = removed_vector.long_edge_in.begin(); iterator !=
-    //     removed_vector.long_edge_in.end();
-    //     ++iterator)
-    //     {
-    //         auto &repaired_id = iterator->first;
-    //         auto &in_edge_distance = iterator->second;
-    //         auto &repaired_vector = index.vectors.find(repaired_id)->second;
-    //         // 删除边
-    //         {
-    //             auto iterator = repaired_vector.long_edge_out.find(in_edge_distance);
-    //             while (iterator->second != removed_vector_id)
-    //             {
-    //                 ++iterator;
-    //             }
-    //             repaired_vector.long_edge_out.erase(iterator);
-    //         }
-    //         // 补边
-    //         for (auto iterator = removed_vector.long_edge_out.begin(); iterator !=
-    //         removed_vector.long_edge_out.end();
-    //              ++iterator)
-    //         {
-    //             auto &new_long_edge_id = iterator->second;
-    //             if (distribution(mt19937_generator) < in_edge_distance)
-    //             {
-    //                 auto &new_long_edge = index.vectors.find(new_long_edge_id)->second;
-    //                 auto distance = index.similarity(repaired_vector.data.data(),
-    //                 new_long_edge.data.data(),
-    //                                                            index.parameters.dimension);
-    //                 if (!prune(index, repaired_vector, new_long_edge, distance))
-    //                 {
-    //                     repaired_vector.long_edge_out.insert({distance, new_long_edge_id});
-    //                     new_long_edge.long_edge_in.insert({repaired_id, distance});
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     index.vectors.erase(removed_vector_id);
-    // }
+    inline void erase(Index &index, const uint64_t removed_vector_id)
+    {
+        auto removed_vector_offset = get_offset(index, removed_vector_id);
+        auto removed_vector = index.vectors[removed_vector_offset];
+
+        // 删除短边的出边
+        for (auto iterator = removed_vector.short_edge_out.begin(); iterator != removed_vector.short_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+            index.vectors[neighbor_offset].short_edge_in.erase(removed_vector_offset);
+        }
+
+        // 删除短边的入边
+        for (auto iterator = removed_vector.short_edge_in.begin(); iterator != removed_vector.short_edge_in.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            auto &distance = iterator->second;
+            auto &vector = index.vectors[neighbor_offset];
+            auto temporary_iterator = vector.short_edge_out.find(distance);
+
+            while (temporary_iterator->second != removed_vector_id)
+            {
+                ++temporary_iterator;
+            }
+
+            vector.short_edge_out.erase(temporary_iterator);
+        }
+
+        // 补边
+        for (auto iterator = removed_vector.short_edge_in.begin(); iterator != removed_vector.short_edge_in.end();
+             ++iterator)
+        {
+            auto &repaired_offset = iterator->first;
+
+            // 需要补边的向量
+            auto &repaired_vector = index.vectors[repaired_offset];
+
+            if (repaired_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit)
+            {
+                auto visited = std::vector<bool>(index.vectors.size(), false);
+                visited[repaired_offset] = true;
+
+                // 优先队列
+                auto nearest_neighbors = std::priority_queue<std::pair<float, uint64_t>>();
+
+                // 排队队列
+                auto waiting_vectors = std::priority_queue<std::pair<float, uint64_t>,
+                                                           std::vector<std::pair<float, uint64_t>>, std::greater<>>();
+
+                for (auto iterator = repaired_vector.short_edge_in.begin();
+                     iterator != repaired_vector.short_edge_in.end(); ++iterator)
+                {
+                    auto &neighbor_offset = iterator->first;
+                    visited[neighbor_offset] = true;
+                    auto &neighbor_vector = index.vectors[neighbor_offset];
+
+                    for (auto iterator = neighbor_vector.short_edge_in.begin();
+                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->first;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.short_edge_out.begin();
+                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->second;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.keep_connected.begin();
+                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = *iterator;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+                }
+
+                for (auto iterator = repaired_vector.short_edge_out.begin();
+                     iterator != repaired_vector.short_edge_out.end(); ++iterator)
+                {
+                    auto &neighbor_offset = iterator->second;
+                    visited[neighbor_offset] = true;
+                    auto &neighbor_vector = index.vectors[neighbor_offset];
+
+                    for (auto iterator = neighbor_vector.short_edge_in.begin();
+                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->first;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.short_edge_out.begin();
+                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->second;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.keep_connected.begin();
+                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = *iterator;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+                }
+
+                for (auto iterator = repaired_vector.keep_connected.begin();
+                     iterator != repaired_vector.keep_connected.end(); ++iterator)
+                {
+                    auto &neighbor_offset = *iterator;
+                    visited[neighbor_offset] = true;
+                    auto &neighbor_vector = index.vectors[neighbor_offset];
+
+                    for (auto iterator = neighbor_vector.short_edge_in.begin();
+                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->first;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.short_edge_out.begin();
+                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = iterator->second;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+
+                    for (auto iterator = neighbor_vector.keep_connected.begin();
+                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
+                    {
+                        // Neighbor Neighbor
+                        auto &NN_offset = *iterator;
+
+                        if (!visited[NN_offset])
+                        {
+                            visited[NN_offset] = true;
+                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
+                                                                   index.parameters.dimension),
+                                                  NN_offset});
+                        }
+                    }
+                }
+
+                while (!waiting_vectors.empty())
+                {
+                    auto processing_distance = waiting_vectors.top().first;
+                    auto processing_vector_offset = waiting_vectors.top().second;
+                    auto &processing_vector = index.vectors[processing_vector_offset];
+                    waiting_vectors.pop();
+
+                    // 如果已遍历的向量小于候选数量
+                    if (nearest_neighbors.size() < index.parameters.magnification)
+                    {
+                        nearest_neighbors.push({processing_distance, processing_vector_offset});
+                    }
+                    else
+                    {
+                        // 如果当前的向量和查询向量的距离小于已优先队列中的最大值
+                        if (processing_distance < nearest_neighbors.top().first)
+                        {
+                            nearest_neighbors.pop();
+                            nearest_neighbors.push({processing_distance, processing_vector_offset});
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    for (auto iterator = processing_vector.short_edge_out.begin();
+                         iterator != processing_vector.short_edge_out.end(); ++iterator)
+                    {
+                        auto neighbor_offset = iterator->second;
+
+                        // 计算当前向量的出边指向的向量和目标向量的距离
+                        if (!visited[neighbor_offset])
+                        {
+                            visited[neighbor_offset] = true;
+
+                            waiting_vectors.push(
+                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
+                                                  index.parameters.dimension),
+                                 neighbor_offset});
+                        }
+                    }
+
+                    for (auto iterator = processing_vector.short_edge_in.begin();
+                         iterator != processing_vector.short_edge_in.end(); ++iterator)
+                    {
+                        auto neighbor_offset = iterator->first;
+
+                        // 计算当前向量的出边指向的向量和目标向量的距离
+                        if (!visited[neighbor_offset])
+                        {
+                            visited[neighbor_offset] = true;
+
+                            waiting_vectors.push(
+                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
+                                                  index.parameters.dimension),
+                                 neighbor_offset});
+                        }
+                    }
+
+                    for (auto iterator = processing_vector.keep_connected.begin();
+                         iterator != processing_vector.keep_connected.end(); ++iterator)
+                    {
+                        auto neighbor_offset = *iterator;
+
+                        // 计算当前向量的出边指向的向量和目标向量的距离
+                        if (!visited[neighbor_offset])
+                        {
+                            visited[neighbor_offset] = true;
+
+                            waiting_vectors.push(
+                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
+                                                  index.parameters.dimension),
+                                 neighbor_offset});
+                        }
+                    }
+                }
+
+                while (nearest_neighbors.size() != 1)
+                {
+                    nearest_neighbors.pop();
+                }
+
+                repaired_vector.short_edge_out.insert(nearest_neighbors.top());
+                index.vectors[nearest_neighbors.top().second].short_edge_in.insert(
+                    {repaired_offset, nearest_neighbors.top().first});
+            }
+        }
+
+        // 处理长边
+        // 删除出边
+        for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+            index.vectors[neighbor_offset].long_edge_in.erase(removed_vector_offset);
+        }
+
+        // 计算分母
+        float sum = 0;
+
+        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+             ++iterator)
+        {
+            auto &distance = iterator->second;
+            sum += distance;
+        }
+
+        // 删除入边并补边
+        // 真随机数生成器
+        std::random_device random_device_generator;
+
+        // 伪随机数生成器
+        // 用真随机数生成器初始化
+        std::mt19937 mt19937_generator(random_device_generator());
+
+        // 均匀分布
+        std::uniform_real_distribution<float> distribution(0, sum);
+
+        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+             ++iterator)
+        {
+            auto &repaired_vector_offset = iterator->first;
+            auto &in_edge_distance = iterator->second;
+            auto &repaired_vector = index.vectors[repaired_vector_offset];
+
+            // 删除边
+            {
+                auto iterator = repaired_vector.long_edge_out.find(in_edge_distance);
+
+                while (iterator->second != removed_vector_offset)
+                {
+                    ++iterator;
+                }
+
+                repaired_vector.long_edge_out.erase(iterator);
+            }
+
+            // 补边
+            for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+                 ++iterator)
+            {
+                auto &new_long_edge_offset = iterator->second;
+
+                if (distribution(mt19937_generator) < in_edge_distance)
+                {
+                    auto &new_long_edge = index.vectors[new_long_edge_offset];
+                    auto distance =
+                        index.similarity(repaired_vector.data, new_long_edge.data, index.parameters.dimension);
+                    repaired_vector.long_edge_out.insert({distance, new_long_edge_offset});
+                    new_long_edge.long_edge_in.insert({repaired_vector_offset, distance});
+                }
+            }
+        }
+
+        delete_vector(removed_vector);
+    }
 
     // 要做的优化：先获取要计算的顶点再统一计算，这样可以手动预取向量数据
     // 查询距离目标向量最近的top-k个向量
@@ -728,40 +918,18 @@ namespace HSG
         auto waiting_vectors =
             std::priority_queue<std::pair<float, uint64_t>, std::vector<std::pair<float, uint64_t>>, std::greater<>>();
 
-        auto &zero_vector = index.vectors[0];
-
-        for (auto iterator = zero_vector.long_edge_out.begin(); iterator != zero_vector.long_edge_out.end(); ++iterator)
-        {
-            auto &neighbor_offset = iterator->second;
-            visited[neighbor_offset] = true;
-            waiting_vectors.push(
-                {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
-                 neighbor_offset});
-        }
+        visit_LEO_first_time(index, index.vectors[0], target_vector, visited, waiting_vectors);
 
         // 阶段一
         // 利用长边快速找到定位到处于目标向量附件区域的向量
         while (true)
         {
-            auto &nearest_offset = waiting_vectors.top().second;
-            auto &nearest_vector = index.vectors[nearest_offset];
+            auto &processing_offset = waiting_vectors.top().second;
+            auto &processing_vector = index.vectors[processing_offset];
 
-            for (auto iterator = nearest_vector.long_edge_out.begin(); iterator != nearest_vector.long_edge_out.end();
-                 ++iterator)
-            {
-                auto &neighbor_offset = iterator->second;
+            visit_LEO(index, processing_vector, target_vector, visited, waiting_vectors);
 
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            if (waiting_vectors.top().second == nearest_offset)
+            if (waiting_vectors.top().second == processing_offset)
             {
                 break;
             }
@@ -773,8 +941,8 @@ namespace HSG
         {
             auto processing_distance = waiting_vectors.top().first;
             auto processing_vector_offset = waiting_vectors.top().second;
-            waiting_vectors.pop();
             auto &processing_vector = index.vectors[processing_vector_offset];
+            waiting_vectors.pop();
 
             // 如果已遍历的向量小于候选数量
             if (nearest_neighbors.size() < top_k + magnification)
@@ -795,50 +963,9 @@ namespace HSG
                 }
             }
 
-            for (auto iterator = processing_vector.short_edge_out.begin();
-                 iterator != processing_vector.short_edge_out.end(); ++iterator)
-            {
-                auto &neighbor_offset = iterator->second;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.short_edge_in.begin();
-                 iterator != processing_vector.short_edge_in.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
-
-            for (auto iterator = processing_vector.keep_connected.begin();
-                 iterator != processing_vector.keep_connected.end(); ++iterator)
-            {
-                auto &neighbor_offset = *iterator;
-
-                // 计算当前向量的出边指向的向量和目标向量的距离
-                if (!visited[neighbor_offset])
-                {
-                    visited[neighbor_offset] = true;
-                    waiting_vectors.push({index.similarity(target_vector, index.vectors[neighbor_offset].data,
-                                                           index.parameters.dimension),
-                                          neighbor_offset});
-                }
-            }
+            visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
+            visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
         }
 
         return nearest_neighbors;
