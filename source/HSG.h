@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <map>
 #include <queue>
 #include <random>
@@ -592,50 +591,9 @@ namespace HSG
                     visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    for (auto iterator = neighbor_vector.short_edge_in.begin();
-                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->first;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.short_edge_out.begin();
-                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->second;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.keep_connected.begin();
-                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = *iterator;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
+                    visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
                 }
 
                 for (auto iterator = repaired_vector.short_edge_out.begin();
@@ -645,50 +603,9 @@ namespace HSG
                     visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    for (auto iterator = neighbor_vector.short_edge_in.begin();
-                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->first;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.short_edge_out.begin();
-                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->second;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.keep_connected.begin();
-                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = *iterator;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
+                    visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
                 }
 
                 for (auto iterator = repaired_vector.keep_connected.begin();
@@ -698,50 +615,9 @@ namespace HSG
                     visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    for (auto iterator = neighbor_vector.short_edge_in.begin();
-                         iterator != neighbor_vector.short_edge_in.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->first;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.short_edge_out.begin();
-                         iterator != neighbor_vector.short_edge_out.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = iterator->second;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
-
-                    for (auto iterator = neighbor_vector.keep_connected.begin();
-                         iterator != neighbor_vector.keep_connected.end(); ++iterator)
-                    {
-                        // Neighbor Neighbor
-                        auto &NN_offset = *iterator;
-
-                        if (!visited[NN_offset])
-                        {
-                            visited[NN_offset] = true;
-                            waiting_vectors.push({index.similarity(repaired_vector.data, index.vectors[NN_offset].data,
-                                                                   index.parameters.dimension),
-                                                  NN_offset});
-                        }
-                    }
+                    visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
                 }
 
                 while (!waiting_vectors.empty())
@@ -770,56 +646,9 @@ namespace HSG
                         }
                     }
 
-                    for (auto iterator = processing_vector.short_edge_out.begin();
-                         iterator != processing_vector.short_edge_out.end(); ++iterator)
-                    {
-                        auto neighbor_offset = iterator->second;
-
-                        // 计算当前向量的出边指向的向量和目标向量的距离
-                        if (!visited[neighbor_offset])
-                        {
-                            visited[neighbor_offset] = true;
-
-                            waiting_vectors.push(
-                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
-                                                  index.parameters.dimension),
-                                 neighbor_offset});
-                        }
-                    }
-
-                    for (auto iterator = processing_vector.short_edge_in.begin();
-                         iterator != processing_vector.short_edge_in.end(); ++iterator)
-                    {
-                        auto neighbor_offset = iterator->first;
-
-                        // 计算当前向量的出边指向的向量和目标向量的距离
-                        if (!visited[neighbor_offset])
-                        {
-                            visited[neighbor_offset] = true;
-
-                            waiting_vectors.push(
-                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
-                                                  index.parameters.dimension),
-                                 neighbor_offset});
-                        }
-                    }
-
-                    for (auto iterator = processing_vector.keep_connected.begin();
-                         iterator != processing_vector.keep_connected.end(); ++iterator)
-                    {
-                        auto neighbor_offset = *iterator;
-
-                        // 计算当前向量的出边指向的向量和目标向量的距离
-                        if (!visited[neighbor_offset])
-                        {
-                            visited[neighbor_offset] = true;
-
-                            waiting_vectors.push(
-                                {index.similarity(repaired_vector.data, index.vectors[neighbor_offset].data,
-                                                  index.parameters.dimension),
-                                 neighbor_offset});
-                        }
-                    }
+                    visit_SEI(index, processing_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_SEO(index, processing_vector, removed_vector.data, visited, waiting_vectors);
+                    visit_KC(index, processing_vector, removed_vector.data, visited, waiting_vectors);
                 }
 
                 while (nearest_neighbors.size() != 1)
