@@ -11,3 +11,4 @@ result
 test
 !test/
 debug
+cmake-build-debug
