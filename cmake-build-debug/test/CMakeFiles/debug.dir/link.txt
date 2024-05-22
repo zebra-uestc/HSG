@@ -1,0 +1,1 @@
+/usr/bin/c++ -std=c++20 -march=native -g -O0 -Wall -Wextra -Wpedantic CMakeFiles/debug.dir/debug.cpp.o -o ../../binary/debug/debug 

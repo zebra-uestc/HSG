@@ -1,0 +1,10 @@
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" -S /home/timlee-snickname/projects/HSG -B /home/timlee-snickname/projects/HSG/cmake-build-debug
+-- CMAKE_BUILD_TYPE: Debug
+-- CMAKE_CXX_FLAGS: -std=c++20 -march=native
+-- CMAKE_CXX_FLAGS_RELEASE: -DNDEBUG -O2 -flto -fpic
+-- CMAKE_CXX_FLAGS_DEBUG: -g -O0 -Wall -Wextra -Wpedantic
+-- Physical cores: 24
+-- Logical cores: 48
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/timlee-snickname/projects/HSG/cmake-build-debug
