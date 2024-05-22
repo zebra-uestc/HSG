@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
-#include "../../hnswlib/hnswlib/hnswlib.h"
-#include "distance.h"
+#include "HSG.h"
+#include "space.h"
 
 std::vector<std::vector<float>> train;
 std::vector<std::vector<float>> test;
@@ -23,7 +23,7 @@ std::vector<std::vector<float>> get_reference_answer()
         for (auto j = 0; j < neighbors[i].size(); ++j)
         {
             reference_answer[i][j] =
-                euclidean2::distance(test[i].data(), train[neighbors[i][j]].data(), train[0].size());
+                Space::Euclidean2::distance(test[i].data(), train[neighbors[i][j]].data(), train[0].size());
         }
     }
     return reference_answer;
@@ -35,7 +35,7 @@ uint64_t verify(const uint64_t t, std::priority_queue<std::pair<float, uint64_t>
     while (!query_result.empty())
     {
         result[query_result.size() - 1] =
-            euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
+            Space::Euclidean2::distance(test[t].data(), train[query_result.top().second].data(), train[0].size());
         query_result.pop();
     }
     uint64_t hit = 0;
@@ -105,67 +105,56 @@ uint64_t done_thread = 0;
 uint64_t done_number = 0;
 auto done = std::counting_semaphore<>(0);
 
-void test_hnsw(uint64_t M, uint64_t ef_construction)
+void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
+               uint64_t build_magnification, uint64_t search_magnification)
 {
-    auto test_result =
-        std::ofstream(std::format("result/hnsw/{0}-{1}.txt", M, ef_construction), std::ios::app | std::ios::out);
+    auto test_result = std::ofstream(
+        std::format("result/milu/{0}-{1}-{2}.txt", short_edge_bound, build_magnification, prune_coefficient),
+        std::ios::app | std::ios::out);
 
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
     test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
                 << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
 
-    test_result << std::format("M: {0:>4} {1:>4}", M, ef_construction) << std::endl;
-    std::vector<uint64_t> p{10, 20, 40, 80, 120, 200, 400, 600, 800};
-    test_result << "p: [" << p[0];
-    for (auto i = 1; i < p.size(); ++i)
+    test_result << std::format("short edge bound: {0:<4} build magnification: {1:<4} prune_coefficient: {2:<3}",
+                               short_edge_bound, build_magnification, prune_coefficient)
+                << std::endl;
+    auto search_magnifications = std::vector<uint64_t>{5, 10, 30, 50};
+    test_result << "search_magnifications: [" << search_magnifications[0];
+    for (auto i = 1; i < search_magnifications.size(); ++i)
     {
-        test_result << ", " << p[i];
+        test_result << ", " << search_magnifications[i];
     }
     test_result << "]" << std::endl;
 
-    int dim = train[0].size();
-    int max_elements = train.size();
-    // Initing index
-    hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float> *alg_hnsw =
-        new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_bound, build_magnification,
+                     prune_coefficient);
 
-    // Add data to index
-    uint64_t total_time = 0;
-    for (int i = 0; i < max_elements; i++)
+    for (auto i = 0; i < train.size(); ++i)
     {
-        // auto begin = std::chrono::high_resolution_clock::now();
-        alg_hnsw->addPoint(train[i].data(), i);
-        // auto end = std::chrono::high_resolution_clock::now();
-        // total_time += std::chrono::duration_cast<std::chrono::microseconds>(end
-        // - begin).count();
+        HSG::add(index, i, train[i].data());
     }
-    // std::cout << "build average time: " << total_time / train.size() <<
-    // std::endl; std::cout << "build time: " << total_time << std::endl;
 
-    for (auto &pp : p)
+    for (auto i = 0; i < search_magnifications.size(); ++i)
     {
+        auto search_magnification = search_magnifications[i];
         uint64_t total_hit = 0;
         uint64_t total_time = 0;
-        alg_hnsw->setEf(pp);
-        // Query the elements for themselves and measure recall
-        for (int i = 0; i < test.size(); ++i)
+        for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test[i].data(), 100);
+            auto query_result = HSG::search(index, test[i].data(), neighbors[i].size(), search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            total_hit += verify(i, result);
+            auto hit = verify(i, query_result);
+            total_hit += hit;
         }
-        // std::cout << "query average time: " << total_time / test.size() <<
-        // std::endl; std::cout << "total hit: " << total_hit << std::endl;
-        // std::cout << total_hit << "    " << total_time / test.size() << std::endl;
-        test_result << std::format("total hit: {0:>13} average time: {1:>13}us", total_hit, total_time / test.size())
+        test_result << std::format("total hit: {0:<13} average time: {1:<13}us", total_hit, total_time / test.size())
                     << std::endl;
     }
 
-    delete alg_hnsw;
+    test_result.close();
     done_semaphore.acquire();
     ++done_thread;
     if (done_thread == done_number)
@@ -194,16 +183,23 @@ int main(int argc, char **argv)
     neighbors = load_neighbors(argv[3]);
     reference_answer = get_reference_answer();
 
-    std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
-    std::vector<uint64_t> ef_constructions{500};
-    done_number += Ms.size() * ef_constructions.size();
-    for (auto &M : Ms)
+    auto short_edge_bounds = std::vector<uint64_t>{4, 8, 16, 24, 32};
+    auto build_magnifications = std::vector<uint64_t>{5, 10, 30, 50};
+    auto prune_coefficients = std::vector<float>{1, 1.1, 1.3, 1.6, 2};
+    done_number += short_edge_bounds.size() * build_magnifications.size() * prune_coefficients.size();
+    for (auto i = 0; i < short_edge_bounds.size(); ++i)
     {
-        for (auto &ef_construction : ef_constructions)
+        auto short_edge_bound = short_edge_bounds[i];
+        for (auto j = 0; j < build_magnifications.size(); ++j)
         {
-            available_thread.acquire();
-            auto one_thread = std::thread(test_hnsw, M, ef_construction);
-            one_thread.detach();
+            auto build_magnification = build_magnifications[j];
+            for (auto k = 0; k < prune_coefficients.size(); ++k)
+            {
+                auto prune_coefficient = prune_coefficients[k];
+                available_thread.acquire();
+                auto one_thread = std::thread(base_test, short_edge_bound, build_magnification, prune_coefficient);
+                one_thread.detach();
+            }
         }
     }
 
