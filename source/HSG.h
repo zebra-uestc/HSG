@@ -943,25 +943,40 @@ namespace HSG
     // }
 
     // Breadth First Search through Short Edges.
-    inline void BFS_through_LE(const Vector &start, std::vector<bool> &covered)
+    inline void BFS_Through_SE(const Vector &start, std::vector<bool> &covered)
     {
     }
 
     // 通过长边进行广度优先遍历
     //
     //  Breadth First Search through Long Edges.
-    inline void BFS_through_LE(const Index &index, std::vector<bool> &covered)
+    inline void BFS_Through_LE(const Index &index, std::vector<bool> &covered)
     {
     }
 
     // 计算覆盖率
-    inline float calculate_coverage(const Index &index)
+    inline float Calculate_Coverage(const Index &index)
     {
         std::vector<bool> covered(index.vectors.size(), false);
-        BFS_through_LE(index, covered);
-        return 0;
+
+        BFS_Through_LE(index, covered);
+
+        auto number = (uint64_t)0;
+
+        for (auto i : covered)
+        {
+            if (i)
+            {
+                ++number;
+            }
+        }
+
+        return (float)number / index.count;
     }
 
     // 优化索引结构
+    inline void Optimize(Index &index)
+    {
+    }
 
 } // namespace HSG
