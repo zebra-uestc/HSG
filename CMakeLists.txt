@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CONFIGURATION_TYPES "Release;Debug" CACHE STRING "" FORCE)
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "-std=c++20 -march=native -stdlib=libc++ -fuse-ld=lld -rtlib=compiler-rt -ferror-limit=0 -ftemplate-backtrace-limit=0" CACHE STRING "" FORCE)

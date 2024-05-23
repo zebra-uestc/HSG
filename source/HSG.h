@@ -28,7 +28,7 @@ namespace HSG
         // 短的入边
         std::unordered_map<uint64_t, float> short_edge_in;
         // 长的出边
-        std::multimap<float, uint64_t> long_edge_out;
+        std::unordered_map<uint64_t, float> long_edge_out;
         // 长的入边
         std::unordered_map<uint64_t, float> long_edge_in;
         //
@@ -99,7 +99,7 @@ namespace HSG
         explicit Index(const Space::Metric space, const uint64_t dimension, const uint64_t short_edge_lower_limit,
                        const uint64_t short_edge_upper_limit, const uint64_t cover_range, const uint64_t magnification)
             : parameters(dimension, space, magnification, short_edge_lower_limit, short_edge_upper_limit, cover_range),
-              count(1), similarity(Space::get_similarity(space)), zero(dimension, 0.0)
+              similarity(Space::get_similarity(space)), count(1), zero(dimension, 0.0)
         {
             this->vectors.push_back(Vector(std::numeric_limits<uint64_t>::max(), 0, this->zero.data()));
             this->id_to_offset.insert({std::numeric_limits<uint64_t>::max(), 0});
@@ -142,7 +142,7 @@ namespace HSG
         for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
              ++iterator)
         {
-            auto &neighbor_offset = iterator->second;
+            auto &neighbor_offset = iterator->first;
             visited[neighbor_offset] = true;
             waiting_vectors.push(
                 {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
@@ -158,7 +158,7 @@ namespace HSG
         for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
              ++iterator)
         {
-            auto &neighbor_offset = iterator->second;
+            auto &neighbor_offset = iterator->first;
 
             // 计算当前向量的出边指向的向量和目标向量的距离
             if (!visited[neighbor_offset])
@@ -232,6 +232,26 @@ namespace HSG
                      neighbor_offset});
             }
         }
+    }
+
+    inline bool adjacent(const Vector &v1, const Vector &v2)
+    {
+        if (v1.keep_connected.contains(v2.offset))
+        {
+            return false;
+        }
+
+        if (v1.short_edge_in.contains(v2.offset))
+        {
+            return false;
+        }
+
+        if (v2.short_edge_in.contains(v1.offset))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     // 查询距离目标向量最近的k个向量
@@ -469,12 +489,12 @@ namespace HSG
 
                         if (NR && !NNR)
                         {
-                            neighbor.long_edge_out.insert({farest_distance, NN_offset});
+                            neighbor.long_edge_out.insert({NN_offset, farest_distance});
                             neighbor_neighbor.long_edge_in.insert({neighbor.offset, farest_distance});
                         }
                         else if (NNR && !NR)
                         {
-                            neighbor_neighbor.long_edge_out.insert({farest_distance, neighbor.offset});
+                            neighbor_neighbor.long_edge_out.insert({neighbor.offset, farest_distance});
                             neighbor.long_edge_in.insert({NN_offset, farest_distance});
                         }
                     }
@@ -509,7 +529,7 @@ namespace HSG
             auto &neighbor_offset = long_path.back().second;
             auto &neighbor = index.vectors[neighbor_offset];
 
-            neighbor.long_edge_out.insert({neighbor_distance, offset});
+            neighbor.long_edge_out.insert({offset, neighbor_distance});
             new_vector.long_edge_in.insert({neighbor_offset, neighbor_distance});
         }
         else if (index.parameters.cover_range < short_path.size())
@@ -523,11 +543,150 @@ namespace HSG
                 auto &next = index.vectors[next_offset];
                 auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
 
-                last.long_edge_out.insert({distance, next_offset});
+                last.long_edge_out.insert({next_offset, distance});
                 next.long_edge_in.insert({last_offset, distance});
 
                 last_offset = next_offset;
                 last = next;
+            }
+        }
+    }
+
+    // 基于权重的长边修补方法
+    inline void repair_LE_weight(Index &index, Vector &removed_vector)
+    {
+        auto &removed_vector_offset = removed_vector.offset;
+
+        // 删除出边
+        for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            index.vectors[neighbor_offset].long_edge_in.erase(removed_vector_offset);
+        }
+
+        // 计算分母
+        float sum = 0;
+
+        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+             ++iterator)
+        {
+            auto &distance = iterator->second;
+            sum += distance;
+        }
+
+        // 删除入边并补边
+        // 真随机数生成器
+        std::random_device random_device_generator;
+
+        // 伪随机数生成器
+        // 用真随机数生成器初始化
+        std::mt19937 mt19937_generator(random_device_generator());
+
+        // 均匀分布
+        std::uniform_real_distribution<float> distribution(0, sum);
+
+        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+             ++iterator)
+        {
+            auto &repaired_vector_offset = iterator->first;
+            auto &in_edge_distance = iterator->second;
+            auto &repaired_vector = index.vectors[repaired_vector_offset];
+
+            // 补边
+            for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+                 ++iterator)
+            {
+                auto &new_long_edge_offset = iterator->first;
+
+                if (distribution(mt19937_generator) < in_edge_distance)
+                {
+                    auto &new_long_edge = index.vectors[new_long_edge_offset];
+                    auto distance =
+                        index.similarity(repaired_vector.data, new_long_edge.data, index.parameters.dimension);
+                    repaired_vector.long_edge_out.insert({new_long_edge_offset, distance});
+                    new_long_edge.long_edge_in.insert({repaired_vector_offset, distance});
+                }
+            }
+        }
+    }
+
+    inline void transfer_LEI(Index &index, Vector &from, Vector &to)
+    {
+        for (auto iterator = from.long_edge_in.begin(); iterator != from.long_edge_in.end(); ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            auto distance = index.similarity(neighbor_vector.data, to.data, index.parameters.dimension);
+
+            neighbor_vector.long_edge_out.erase(from.offset);
+            neighbor_vector.long_edge_out.insert({to.offset, distance});
+            to.long_edge_in.insert({neighbor_offset, distance});
+        }
+    }
+
+    inline void transfer_LEO(Index &index, Vector &from, Vector &to)
+    {
+        for (auto iterator = from.long_edge_out.begin(); iterator != from.long_edge_out.end(); ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            auto distance = index.similarity(neighbor_vector.data, to.data, index.parameters.dimension);
+
+            neighbor_vector.long_edge_in.erase(from.offset);
+            neighbor_vector.long_edge_in.insert({to.offset, distance});
+            to.long_edge_out.insert({neighbor_offset, distance});
+        }
+    }
+
+    inline void transfer_LE(Index &index, Vector &from, Vector &to)
+    {
+        transfer_LEI(index, from, to);
+        transfer_LEO(index, from, to);
+        from.long_edge_in.clear();
+        from.long_edge_out.clear();
+    }
+
+    // 通过转移长边到距离被删除向量最近的向量修补长边
+    inline void repair_LE_transfer(Index &index, Vector &removed_vector)
+    {
+        auto &RV = removed_vector;
+        auto &substitute_offset = removed_vector.short_edge_out.begin()->second;
+        auto &substitute_vector = index.vectors[substitute_offset];
+
+        for (auto iterator = RV.long_edge_out.begin(); iterator != RV.long_edge_out.end(); ++iterator)
+        {
+            auto &repaired_offset = iterator->first;
+            auto &repaired_vector = index.vectors[repaired_offset];
+
+            if (adjacent(repaired_vector, substitute_vector))
+            {
+                transfer_LE(index, repaired_vector, substitute_vector);
+            }
+            else
+            {
+                auto distance =
+                    index.similarity(substitute_vector.data, repaired_vector.data, index.parameters.dimension);
+                substitute_vector.long_edge_out.insert({repaired_offset, distance});
+                repaired_vector.long_edge_in.insert({substitute_offset, distance});
+            }
+        }
+
+        for (auto iterator = RV.long_edge_in.begin(); iterator != RV.long_edge_in.end(); ++iterator)
+        {
+            auto &repaired_offset = iterator->first;
+            auto &repaired_vector = index.vectors[repaired_offset];
+
+            if (adjacent(repaired_vector, substitute_vector))
+            {
+                transfer_LE(index, repaired_vector, substitute_vector);
+            }
+            else
+            {
+                auto distance =
+                    index.similarity(substitute_vector.data, repaired_vector.data, index.parameters.dimension);
+                repaired_vector.long_edge_out.insert({substitute_offset, distance});
+                substitute_vector.long_edge_in.insert({repaired_offset, distance});
             }
         }
     }
@@ -662,71 +821,27 @@ namespace HSG
             }
         }
 
-        // 处理长边
-        // 删除出边
+        // 删除长边
         for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
              ++iterator)
         {
-            auto &neighbor_offset = iterator->second;
-            index.vectors[neighbor_offset].long_edge_in.erase(removed_vector_offset);
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            neighbor_vector.long_edge_in.erase(removed_vector_offset);
         }
-
-        // 计算分母
-        float sum = 0;
 
         for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
              ++iterator)
         {
-            auto &distance = iterator->second;
-            sum += distance;
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            neighbor_vector.long_edge_out.erase(removed_vector_offset);
         }
 
-        // 删除入边并补边
-        // 真随机数生成器
-        std::random_device random_device_generator;
-
-        // 伪随机数生成器
-        // 用真随机数生成器初始化
-        std::mt19937 mt19937_generator(random_device_generator());
-
-        // 均匀分布
-        std::uniform_real_distribution<float> distribution(0, sum);
-
-        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
-             ++iterator)
-        {
-            auto &repaired_vector_offset = iterator->first;
-            auto &in_edge_distance = iterator->second;
-            auto &repaired_vector = index.vectors[repaired_vector_offset];
-
-            // 删除边
-            {
-                auto iterator = repaired_vector.long_edge_out.find(in_edge_distance);
-
-                while (iterator->second != removed_vector_offset)
-                {
-                    ++iterator;
-                }
-
-                repaired_vector.long_edge_out.erase(iterator);
-            }
-
-            // 补边
-            for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
-                 ++iterator)
-            {
-                auto &new_long_edge_offset = iterator->second;
-
-                if (distribution(mt19937_generator) < in_edge_distance)
-                {
-                    auto &new_long_edge = index.vectors[new_long_edge_offset];
-                    auto distance =
-                        index.similarity(repaired_vector.data, new_long_edge.data, index.parameters.dimension);
-                    repaired_vector.long_edge_out.insert({distance, new_long_edge_offset});
-                    new_long_edge.long_edge_in.insert({repaired_vector_offset, distance});
-                }
-            }
-        }
+        // 如果长边不多
+        // repair_LE_weight(index, removed_vector);
+        // 否则
+        repair_LE_transfer(index, removed_vector);
 
         delete_vector(removed_vector);
     }
@@ -818,7 +933,7 @@ namespace HSG
     //     return nearest_neighbors(index, query_vector, top_k, magnification);
     // }
 
-    // Breadth First Search through Long Edges.
+    // Breadth First Search through Short Edges.
     inline void BFS_through_LE(const Vector &start, std::vector<bool> &covered)
     {
     }
