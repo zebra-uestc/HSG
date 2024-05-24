@@ -135,6 +135,7 @@ namespace HSG
 
     inline void Delete_Vector(Vector &vector)
     {
+        vector.data = nullptr;
         vector.keep_connected.clear();
         vector.long_edge_in.clear();
         vector.long_edge_out.clear();
@@ -421,6 +422,45 @@ namespace HSG
         return false;
     }
 
+    // 添加长边
+    //
+    // 简单分为三种情况
+    //
+    // 只实现了第一种情况，后两种情况没有单独处理
+    inline void Add_Long_Edges(Index &index, std::vector<std::pair<float, Offset>> &long_path,
+                               std::vector<std::pair<float, Offset>> &short_path, Vector &vector)
+    {
+        auto &offset = vector.offset;
+
+        if (short_path.size() == index.parameters.cover_range)
+        {
+            auto &neighbor_distance = long_path.back().first;
+            auto &neighbor_offset = long_path.back().second;
+            auto &neighbor = index.vectors[neighbor_offset];
+
+            neighbor.long_edge_out.insert({offset, neighbor_distance});
+            vector.long_edge_in.insert({neighbor_offset, neighbor_distance});
+        }
+        else if (index.parameters.cover_range < short_path.size())
+        {
+            auto &last_offset = long_path.back().second;
+            auto &last = index.vectors[last_offset];
+
+            for (auto i = index.parameters.cover_range; i < short_path.size(); i += index.parameters.cover_range + 1)
+            {
+                auto &next_offset = short_path[i].second;
+                auto &next = index.vectors[next_offset];
+                auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
+
+                last.long_edge_out.insert({next_offset, distance});
+                next.long_edge_in.insert({last_offset, distance});
+
+                last_offset = next_offset;
+                last = next;
+            }
+        }
+    }
+
     // 添加
     inline void Add(Index &index, const ID id, const float *const added_vector_data)
     {
@@ -529,36 +569,7 @@ namespace HSG
             }
         }
 
-        // 添加长边
-        // 简单分为三种情况
-        // 只实现了第一种情况，后两种情况没有单独处理
-        if (short_path.size() == index.parameters.cover_range)
-        {
-            auto &neighbor_distance = long_path.back().first;
-            auto &neighbor_offset = long_path.back().second;
-            auto &neighbor = index.vectors[neighbor_offset];
-
-            neighbor.long_edge_out.insert({offset, neighbor_distance});
-            new_vector.long_edge_in.insert({neighbor_offset, neighbor_distance});
-        }
-        else if (index.parameters.cover_range < short_path.size())
-        {
-            auto &last_offset = long_path.back().second;
-            auto &last = index.vectors[last_offset];
-
-            for (auto i = index.parameters.cover_range; i < short_path.size(); i += index.parameters.cover_range + 1)
-            {
-                auto &next_offset = short_path[i].second;
-                auto &next = index.vectors[next_offset];
-                auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
-
-                last.long_edge_out.insert({next_offset, distance});
-                next.long_edge_in.insert({last_offset, distance});
-
-                last_offset = next_offset;
-                last = next;
-            }
-        }
+        Add_Long_Edges(index, long_path, short_path, new_vector);
     }
 
     // 基于权重的长边修补方法
@@ -949,8 +960,8 @@ namespace HSG
 
     // 通过长边进行广度优先遍历
     //
-    //  Breadth First Search through Long Edges.
-    inline void BFS_Through_LE(const Index &index, std::vector<bool> &covered)
+    //  Breadth First Search Through Long Edges Out.
+    inline void BFS_Through_LEO(const Index &index, std::vector<bool> &covered)
     {
     }
 
@@ -959,7 +970,7 @@ namespace HSG
     {
         std::vector<bool> covered(index.vectors.size(), false);
 
-        BFS_Through_LE(index, covered);
+        BFS_Through_LEO(index, covered);
 
         auto number = (uint64_t)0;
 
@@ -974,9 +985,108 @@ namespace HSG
         return (float)number / index.count;
     }
 
+    inline uint64_t Calculate_Benefits(const Index &index, const std::unordered_set<Offset> &missed, const Offset start)
+    {
+        auto visited = std::unordered_set<Offset>();
+        visited.insert(start);
+        auto last = std::vector<Offset>();
+        last.push_back(start);
+        auto next = std::vector<Offset>();
+
+        for (auto i = 0; i < index.parameters.cover_range; ++i)
+        {
+            for (auto j = 0; j < last.size(); ++j)
+            {
+                auto &offset = last[j];
+                auto &vector = index.vectors[offset];
+
+                for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
+                {
+                    auto &neighbor_offset = iterator->first;
+
+                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    {
+                        visited.insert(neighbor_offset);
+                        next.push_back(neighbor_offset);
+                    }
+                }
+
+                for (auto iterator = vector.short_edge_out.begin(); iterator != vector.short_edge_out.end(); ++iterator)
+                {
+                    auto &neighbor_offset = iterator->second;
+
+                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    {
+                        visited.insert(neighbor_offset);
+                        next.push_back(neighbor_offset);
+                    }
+                }
+
+                for (auto iterator = vector.keep_connected.begin(); iterator != vector.keep_connected.end(); ++iterator)
+                {
+                    auto &neighbor_offset = *iterator;
+
+                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    {
+                        visited.insert(neighbor_offset);
+                        next.push_back(neighbor_offset);
+                    }
+                }
+            }
+
+            std::swap(last, next);
+            next.clear();
+        }
+
+        return visited.size();
+    }
+
+    // 计算为哪个顶点补长边可以覆盖的顶点最多
+    inline Offset Max_Benefits(const Index &index, std::unordered_set<Offset> &missed)
+    {
+        auto max_benefits = (uint64_t)0;
+        auto max_benefit_offset = 0;
+
+        for (auto iterator = missed.begin(); iterator != missed.end(); ++iterator)
+        {
+            auto offset = *iterator;
+            auto benefits = Calculate_Benefits(index, missed, offset);
+
+            if (max_benefits < benefits)
+            {
+                max_benefits = benefits;
+                max_benefit_offset = offset;
+            }
+        }
+
+        return max_benefit_offset;
+    }
+
     // 优化索引结构
     inline void Optimize(Index &index)
     {
+        std::vector<bool> covered(index.vectors.size(), false);
+
+        BFS_Through_LEO(index, covered);
+
+        auto missed = std::unordered_set<Offset>();
+
+        for (auto offset = 0; offset < covered.size(); ++offset)
+        {
+            if (!offset && index.vectors[offset].data != nullptr)
+            {
+                missed.insert(offset);
+            }
+        }
+
+        auto offset = Max_Benefits(index, missed);
+        auto &vector = index.vectors[offset];
+        auto nearest_neighbors = std::priority_queue<std::pair<float, Offset>>();
+        auto long_path = std::vector<std::pair<float, Offset>>();
+        auto short_path = std::vector<std::pair<float, Offset>>();
+
+        Search_Add(index, vector.data, long_path, short_path, nearest_neighbors);
+        Add_Long_Edges(index, long_path, short_path, vector);
     }
 
 } // namespace HSG
