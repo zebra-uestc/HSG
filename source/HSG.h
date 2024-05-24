@@ -990,8 +990,34 @@ namespace HSG
     // }
 
     // Breadth First Search through Long Edges.
-    inline void BFS_through_LE(const Vector &start, std::vector<bool> &covered)
+    inline void BFS_through_LE(const Vector &start,const Index &index, std::vector<bool> &covered)
     {
+        //广度优先遍历使用队列实现
+        //定义队列
+        std::queue<uint64_t> queue;
+        //将起始点加入队列，并标记为已访问
+        queue.push(start.offset);
+        covered.at(start.offset) = true;
+        while(!queue.empty())
+        {
+            //取出队列首部的Vector
+            const Vector & current_vector = index.vectors[queue.front()];
+            queue.pop();
+            //遍历当前节点的所有长边出边
+            for(auto it = current_vector.long_edge_out.begin();it != current_vector.short_edge_out.end();++it)
+            {
+                if(it->first == current_vector.offset)
+                {
+                    uint64_t neighbor_offset = it->second;
+                    //如果长边邻居节点未被访问过，则将其加入队列并标记为已访问
+                    if(!covered.at(neighbor_offset))
+                    {
+                        queue.push(neighbor_offset);
+                        covered.at(neighbor_offset) = true;
+                    }
+                }
+            }
+        }
     }
 
     // 通过长边进行广度优先遍历

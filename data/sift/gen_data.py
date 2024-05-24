@@ -116,7 +116,7 @@ def get_topk_indices(neighbors,k):
         element_list.extend(top_k_elements.tolist())
         print("已选择",i+1,"列...\n")
     # 将列表转换为np数组
-    topk_indices = np.array(list(set(element_list)))
+    topk_indices = np.array(element_list)
     # 保存为二进制文件
     with open('topk_indices.bin', 'wb') as f:
         f.write(topk_indices.tobytes())
@@ -132,5 +132,4 @@ non_neighbors_indices = get_non_neighbors_indices(neighbors, len(train), k)
 # k/2个非邻居索引，k/2个邻居索引
 mixed_indices = get_mixed_indices(neighbors, len(train), k)
 # 每行前k个
-topk_indices = get_topk_indices(neighbors,50)
- 
+topk_indices = get_topk_indices(neighbors,10)
