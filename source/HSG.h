@@ -939,16 +939,19 @@ namespace HSG
     {
         if (!pool.empty())
         {
-            Prefetch(index.vectors[pool[0]].data);
+            Prefetch(index.vectors[pool.front()].data);
 
             const auto number = pool.size() - 1;
 
             for (auto i = 0; i < number; ++i)
             {
-                Prefetch(index.vectors[pool[i + 1]].data);
+                auto &neighbor_offset = pool[i];
+                auto &next_offset = pool[i + 1];
+
+                Prefetch(index.vectors[next_offset].data);
                 waiting_vectors.push(
-                    {index.similarity(target_vector, index.vectors[pool[i]].data, index.parameters.dimension),
-                     pool[i]});
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
             }
 
             waiting_vectors.push(
@@ -959,7 +962,6 @@ namespace HSG
         }
     }
 
-    // 要做的优化：先获取要计算的顶点再统一计算，这样可以手动预取向量数据
     // 查询距离目标向量最近的top-k个向量
     inline std::priority_queue<std::pair<float, ID>> search(const Index &index, const float *const target_vector,
                                                             const uint64_t top_k, const uint64_t magnification)
