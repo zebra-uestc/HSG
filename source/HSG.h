@@ -954,63 +954,58 @@ namespace HSG
     // }
 
     // Breadth First Search through Short Edges.
-    inline void BFS_Through_SE(const Vector &start, std::vector<bool> &covered)
+    inline void BFS_Through_SE(const Index &index, const Vector &start, std::vector<bool> &covered)
     {
-        //使用队列实现index.parameters.cover_range轮广度优先短边遍历
-        //首先定义队列并将开始节点入队
-        std::queue<std::pair<uint64_t ,int>> queue;
-        queue.push(std:: pair<uint64_t,int>(start.offset,0));
+        // 使用队列实现index.parameters.cover_range轮广度优先短边遍历
+        // 首先定义队列并将开始节点入队
+        std::queue<std::pair<uint64_t, int>> queue;
+        queue.push(std::pair<uint64_t, int>(start.offset, 0));
         covered.at(start.offset) = true;
-        //直到队列为空，即所有短边能到达的点都被遍历过，或者轮数达到index.parameters.cover_range轮，才结束遍历
-        while(!queue.empty())
+        // 直到队列为空，即所有短边能到达的点都被遍历过，或者轮数达到index.parameters.cover_range轮，才结束遍历
+        while (!queue.empty())
+        {
+            // 取出队列首部的Vector和深度depth
+            const Vector &current_vector = index.vectors[queue.front().first];
+            int depth = queue.front().second;
+            // 如果此时深度depth已经超过要遍历的轮数，则直接结束遍历
+            if (depth > index.parameters.cover_range)
+                return;
+            queue.pop();
+            // 遍历当前节点的所有短边出边
+            for (auto it = current_vector.short_edge_out.begin(); it != current_vector.short_edge_out.end(); ++it)
             {
-                //取出队列首部的Vector和深度depth
-                const Vector & current_vector = index.vectors[queue.front().first];
-                int depth = queue.front().second;
-                //如果此时深度depth已经超过要遍历的轮数，则直接结束遍历
-                if(depth > index.parameters.cover_range)
-                    return;
-                queue.pop();
-                //遍历当前节点的所有短边出边
-                for(auto it = current_vector.short_edge_out.begin();it != current_vector.short_edge_out.end();++it)
+                // 弧尾即为邻居节点的offset
+                uint64_t neighbor_offset = it->first;
+                // 如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
+                if (!covered.at(neighbor_offset))
                 {
-                    //验证边的弧头是否是当前节点
-                    if(it->first == current_vector.offset)
-                    {
-                        //弧尾即为邻居节点的offset
-                        uint64_t neighbor_offset = it->second;
-                        //如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
-                        if(!covered.at(neighbor_offset))
-                        {
-                            //入队<节点offset,深度加一>
-                            queue.push(std::pair<uint64_t,int>(neighbor_offset,depth + 1));
-                            covered.at(neighbor_offset) = true;
-                        }
-                    }
+                    // 入队<节点offset,深度加一>
+                    queue.push(std::pair<uint64_t, int>(neighbor_offset, depth + 1));
+                    covered.at(neighbor_offset) = true;
                 }
-                //短边入边
-                for(auto it = current_vector.short_edge_in.begin();it != current_vector.short_edge_in.end();++it)
+            }
+            // 短边入边
+            for (auto it = current_vector.short_edge_in.begin(); it != current_vector.short_edge_in.end(); ++it)
+            {
+                // 弧尾即为邻居节点的offset
+                uint64_t neighbor_offset = it->first;
+                // 如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
+                if (!covered.at(neighbor_offset))
                 {
-                    //验证边的弧头是否是当前节点
-                    if(it->first == current_vector.offset)
-                    {
-                        //弧尾即为邻居节点的offset
-                        uint64_t neighbor_offset = it->second;
-                        //如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
-                        if(!covered.at(neighbor_offset))
-                        {
-                            //入队<节点offset,深度加一>
-                            queue.push(std::pair<uint64_t,int>(neighbor_offset,depth + 1));
-                            covered.at(neighbor_offset) = true;
-                        }
-                    }
+                    // 入队<节点offset,深度加一>
+                    queue.push(std::pair<uint64_t, int>(neighbor_offset, depth + 1));
+                    covered.at(neighbor_offset) = true;
                 }
-                for (const auto & offset : current_vector.keep_connected)
-                {
-                    if(!covered.at(offset))
+            }
+            for (const auto &offset : current_vector.keep_connected)
+            {
+                if (!covered.at(offset))
+                { // 入队<节点offset,深度加一>
+                    queue.push(std::pair<uint64_t, int>(offset, depth + 1));
                     covered.at(offset) = true;
                 }
             }
+        }
     }
 
     // 通过长边进行广度优先遍历
@@ -1018,29 +1013,26 @@ namespace HSG
     //  Breadth First Search Through Long Edges Out.
     inline void BFS_Through_LEO(const Index &index, std::vector<bool> &covered)
     {
-        //广度优先遍历使用队列实现
-        //定义队列
+        // 广度优先遍历使用队列实现
+        // 定义队列
         std::queue<uint64_t> queue;
-        //将起始点加入队列，并标记为已访问
+        // 将起始点加入队列，并标记为已访问
         queue.push(index.vectors[0].offset);
-        BFS_through_SE(index.vectors[0],index,covered);
-        while(!queue.empty())
+        BFS_Through_SE(index, index.vectors[0], covered);
+        while (!queue.empty())
         {
-            //取出队列首部的Vector
-            const Vector & current_vector = index.vectors[queue.front()];
+            // 取出队列首部的Vector
+            const Vector &current_vector = index.vectors[queue.front()];
             queue.pop();
-            //遍历当前节点的所有长边出边
-            for(auto it = current_vector.long_edge_out.begin();it != current_vector.short_edge_out.end();++it)
+            // 遍历当前节点的所有长边出边
+            for (auto it = current_vector.long_edge_out.begin(); it != current_vector.long_edge_out.end(); ++it)
             {
-                if(it->first == current_vector.offset)
+                uint64_t neighbor_offset = it->first;
+                // 如果长边邻居节点未被访问过，则将其加入队列并标记为已访问
+                if (!covered.at(neighbor_offset))
                 {
-                    uint64_t neighbor_offset = it->second;
-                    //如果长边邻居节点未被访问过，则将其加入队列并标记为已访问
-                    if(!covered.at(neighbor_offset))
-                    {
-                        queue.push(neighbor_offset);
-                        BFS_through_SE(index.vectors[neighbor_offset],index,covered);
-                    }
+                    queue.push(neighbor_offset);
+                    BFS_Through_SE(index, index.vectors[neighbor_offset], covered);
                 }
             }
         }
@@ -1074,7 +1066,7 @@ namespace HSG
         last.push_back(start);
         auto next = std::vector<Offset>();
 
-        for (auto i = 0; i < index.parameters.cover_range; ++i)
+        for (auto i = 1; i < index.parameters.cover_range; ++i)
         {
             for (auto j = 0; j < last.size(); ++j)
             {
@@ -1117,6 +1109,44 @@ namespace HSG
 
             std::swap(last, next);
             next.clear();
+        }
+
+        auto benefits = (uint64_t)0;
+
+        for (auto i = 0; i < last.size(); ++i)
+        {
+            auto &offset = last[i];
+            auto &vector = index.vectors[offset];
+
+            for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
+            {
+                auto &neighbor_offset = iterator->first;
+
+                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                {
+                    visited.insert(neighbor_offset);
+                }
+            }
+
+            for (auto iterator = vector.short_edge_out.begin(); iterator != vector.short_edge_out.end(); ++iterator)
+            {
+                auto &neighbor_offset = iterator->second;
+
+                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                {
+                    visited.insert(neighbor_offset);
+                }
+            }
+
+            for (auto iterator = vector.keep_connected.begin(); iterator != vector.keep_connected.end(); ++iterator)
+            {
+                auto &neighbor_offset = *iterator;
+
+                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                {
+                    visited.insert(neighbor_offset);
+                }
+            }
         }
 
         return visited.size();
