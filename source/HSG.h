@@ -968,7 +968,7 @@ namespace HSG
             const Vector &current_vector = index.vectors[queue.front().first];
             int depth = queue.front().second;
             // 如果此时深度depth已经超过要遍历的轮数，则直接结束遍历
-            if (depth > index.parameters.cover_range)
+            if (depth == index.parameters.cover_range)
                 return;
             queue.pop();
             // 遍历当前节点的所有短边出边
@@ -1110,8 +1110,6 @@ namespace HSG
             std::swap(last, next);
             next.clear();
         }
-
-        auto benefits = (uint64_t)0;
 
         for (auto i = 0; i < last.size(); ++i)
         {
