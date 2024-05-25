@@ -120,7 +120,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
 
     for (auto i = 0; i < train.size(); ++i)
     {
-        HSG::add(index, i, train[i].data());
+        HSG::Add(index, i, train[i].data());
     }
 
     uint64_t total_hit = 0;
