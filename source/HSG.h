@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <map>
 #include <queue>
 #include <random>
@@ -866,7 +867,101 @@ namespace HSG
         Delete_Vector(removed_vector);
     }
 
-    // 要做的优化：先获取要计算的顶点再统一计算，这样可以手动预取向量数据
+    inline void Get_Pool_From_LEO(const Vector &processing_vector, std::vector<bool> &visited,
+                                  std::vector<Offset> &pool)
+    {
+        for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+    }
+
+    inline void Get_Pool_From_SE(const Vector &processing_vector, std::vector<bool> &visited, std::vector<Offset> &pool)
+    {
+        for (auto iterator = processing_vector.short_edge_out.begin();
+             iterator != processing_vector.short_edge_out.end(); ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+
+        for (auto iterator = processing_vector.short_edge_in.begin(); iterator != processing_vector.short_edge_in.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+
+        for (auto iterator = processing_vector.keep_connected.begin();
+             iterator != processing_vector.keep_connected.end(); ++iterator)
+        {
+            auto &neighbor_offset = *iterator;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+    }
+
+    inline void Prefetch(const float *const data)
+    {
+#if defined(__SSE__)
+        _mm_prefetch(data, _MM_HINT_T0);
+#endif
+    }
+
+    inline void Similarity(const Index &index, const float *const target_vector, std::vector<Offset> &pool,
+                           std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
+                                               std::greater<>> &waiting_vectors)
+    {
+        if (!pool.empty())
+        {
+            Prefetch(index.vectors[pool.front()].data);
+
+            const auto number = pool.size() - 1;
+
+            for (auto i = 0; i < number; ++i)
+            {
+                auto &neighbor_offset = pool[i];
+                auto &next_offset = pool[i + 1];
+
+                Prefetch(index.vectors[next_offset].data);
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+
+            waiting_vectors.push(
+                {index.similarity(target_vector, index.vectors[pool.back()].data, index.parameters.dimension),
+                 pool.back()});
+
+            pool.clear();
+        }
+    }
+
     // 查询距离目标向量最近的top-k个向量
     inline std::priority_queue<std::pair<float, ID>> search(const Index &index, const float *const target_vector,
                                                             const uint64_t top_k, const uint64_t magnification)
@@ -882,7 +977,11 @@ namespace HSG
         auto waiting_vectors =
             std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>, std::greater<>>();
 
-        Visit_LEO_First_Time(index, index.vectors[0], target_vector, visited, waiting_vectors);
+        // 计算池子
+        auto pool = std::vector<Offset>();
+
+        Get_Pool_From_LEO(index.vectors[0], visited, pool);
+        Similarity(index, target_vector, pool, waiting_vectors);
 
         // 阶段一
         // 利用长边快速找到定位到处于目标向量附件区域的向量
@@ -891,7 +990,8 @@ namespace HSG
             auto &processing_offset = waiting_vectors.top().second;
             auto &processing_vector = index.vectors[processing_offset];
 
-            Visit_LEO(index, processing_vector, target_vector, visited, waiting_vectors);
+            Get_Pool_From_LEO(processing_vector, visited, pool);
+            Similarity(index, target_vector, pool, waiting_vectors);
 
             if (waiting_vectors.top().second == processing_offset)
             {
@@ -927,9 +1027,8 @@ namespace HSG
                 }
             }
 
-            Visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
+            Get_Pool_From_SE(processing_vector, visited, pool);
+            Similarity(index, target_vector, pool, waiting_vectors);
         }
 
         return nearest_neighbors;

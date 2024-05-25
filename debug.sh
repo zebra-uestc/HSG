@@ -6,4 +6,4 @@ numactl --cpunodebind=1 --localalloc \
     ./data/${data}/train \
     ./data/${data}/test \
     ./data/${data}/neighbors \
-    4 8 4 8 10
+    4 8 4 10 10
