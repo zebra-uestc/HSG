@@ -264,6 +264,101 @@ namespace HSG
         return false;
     }
 
+    inline void Get_Pool_From_LEO(const Vector &processing_vector, std::vector<bool> &visited,
+                                  std::vector<Offset> &pool)
+    {
+        for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+    }
+
+    inline void Get_Pool_From_SE(const Vector &processing_vector, std::vector<bool> &visited, std::vector<Offset> &pool)
+    {
+        for (auto iterator = processing_vector.short_edge_out.begin();
+             iterator != processing_vector.short_edge_out.end(); ++iterator)
+        {
+            auto &neighbor_offset = iterator->second;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+
+        for (auto iterator = processing_vector.short_edge_in.begin(); iterator != processing_vector.short_edge_in.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+
+        for (auto iterator = processing_vector.keep_connected.begin();
+             iterator != processing_vector.keep_connected.end(); ++iterator)
+        {
+            auto &neighbor_offset = *iterator;
+
+            // 计算当前向量的出边指向的向量和目标向量的距离
+            if (!visited[neighbor_offset])
+            {
+                visited[neighbor_offset] = true;
+                pool.push_back(neighbor_offset);
+            }
+        }
+    }
+
+    inline void Prefetch(const float *const data)
+    {
+#if defined(__SSE__)
+        _mm_prefetch(data, _MM_HINT_T0);
+#endif
+    }
+
+    inline void Similarity(const Index &index, const float *const target_vector, std::vector<Offset> &pool,
+                           std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
+                                               std::greater<>> &waiting_vectors)
+    {
+        if (!pool.empty())
+        {
+            Prefetch(index.vectors[pool.front()].data);
+
+            const auto number = pool.size() - 1;
+
+            for (auto i = 0; i < number; ++i)
+            {
+                auto &neighbor_offset = pool[i];
+                auto &next_offset = pool[i + 1];
+
+                Prefetch(index.vectors[next_offset].data);
+                waiting_vectors.push(
+                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
+                     neighbor_offset});
+            }
+
+            waiting_vectors.push(
+                {index.similarity(target_vector, index.vectors[pool.back()].data, index.parameters.dimension),
+                 pool.back()});
+
+            pool.clear();
+        }
+    }
+
     // 查询距离目标向量最近的k个向量
     //
     // k = index.parameters.short_edge_lower_limit
@@ -283,6 +378,9 @@ namespace HSG
         auto visited = std::vector<bool>(index.vectors.size(), false);
         visited[0] = true;
 
+        // 计算池子
+        auto pool = std::vector<Offset>();
+
         // 阶段一：
         // 利用长边快速找到定位到处于目标向量附近区域的向量
         while (true)
@@ -291,7 +389,8 @@ namespace HSG
             auto &processing_vector = index.vectors[processing_offset];
             long_path.push_back(waiting_vectors.top());
 
-            Visit_LEO(index, processing_vector, target_vector, visited, waiting_vectors);
+            Get_Pool_From_LEO(processing_vector, visited, pool);
+            Similarity(index, target_vector, pool, waiting_vectors);
 
             if (processing_offset == waiting_vectors.top().second)
             {
@@ -306,9 +405,8 @@ namespace HSG
             auto &processing_offset = waiting_vectors.top().second;
             auto &processing_vector = index.vectors[processing_offset];
 
-            Visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
+            Get_Pool_From_SE(processing_vector, visited, pool);
+            Similarity(index, target_vector, pool, waiting_vectors);
 
             if (processing_offset == waiting_vectors.top().second)
             {
@@ -346,9 +444,8 @@ namespace HSG
                 }
             }
 
-            Visit_SEO(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_SEI(index, processing_vector, target_vector, visited, waiting_vectors);
-            Visit_KC(index, processing_vector, target_vector, visited, waiting_vectors);
+            Get_Pool_From_SE(processing_vector, visited, pool);
+            Similarity(index, target_vector, pool, waiting_vectors);
         }
 
         auto &farest_neighbor_distance = nearest_neighbors.top().first;
@@ -865,101 +962,6 @@ namespace HSG
         Repair_LE_Transfer(index, removed_vector);
 
         Delete_Vector(removed_vector);
-    }
-
-    inline void Get_Pool_From_LEO(const Vector &processing_vector, std::vector<bool> &visited,
-                                  std::vector<Offset> &pool)
-    {
-        for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
-             ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            if (!visited[neighbor_offset])
-            {
-                visited[neighbor_offset] = true;
-                pool.push_back(neighbor_offset);
-            }
-        }
-    }
-
-    inline void Get_Pool_From_SE(const Vector &processing_vector, std::vector<bool> &visited, std::vector<Offset> &pool)
-    {
-        for (auto iterator = processing_vector.short_edge_out.begin();
-             iterator != processing_vector.short_edge_out.end(); ++iterator)
-        {
-            auto &neighbor_offset = iterator->second;
-
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            if (!visited[neighbor_offset])
-            {
-                visited[neighbor_offset] = true;
-                pool.push_back(neighbor_offset);
-            }
-        }
-
-        for (auto iterator = processing_vector.short_edge_in.begin(); iterator != processing_vector.short_edge_in.end();
-             ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            if (!visited[neighbor_offset])
-            {
-                visited[neighbor_offset] = true;
-                pool.push_back(neighbor_offset);
-            }
-        }
-
-        for (auto iterator = processing_vector.keep_connected.begin();
-             iterator != processing_vector.keep_connected.end(); ++iterator)
-        {
-            auto &neighbor_offset = *iterator;
-
-            // 计算当前向量的出边指向的向量和目标向量的距离
-            if (!visited[neighbor_offset])
-            {
-                visited[neighbor_offset] = true;
-                pool.push_back(neighbor_offset);
-            }
-        }
-    }
-
-    inline void Prefetch(const float *const data)
-    {
-#if defined(__SSE__)
-        _mm_prefetch(data, _MM_HINT_T0);
-#endif
-    }
-
-    inline void Similarity(const Index &index, const float *const target_vector, std::vector<Offset> &pool,
-                           std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
-                                               std::greater<>> &waiting_vectors)
-    {
-        if (!pool.empty())
-        {
-            Prefetch(index.vectors[pool.front()].data);
-
-            const auto number = pool.size() - 1;
-
-            for (auto i = 0; i < number; ++i)
-            {
-                auto &neighbor_offset = pool[i];
-                auto &next_offset = pool[i + 1];
-
-                Prefetch(index.vectors[next_offset].data);
-                waiting_vectors.push(
-                    {index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension),
-                     neighbor_offset});
-            }
-
-            waiting_vectors.push(
-                {index.similarity(target_vector, index.vectors[pool.back()].data, index.parameters.dimension),
-                 pool.back()});
-
-            pool.clear();
-        }
     }
 
     // 查询距离目标向量最近的top-k个向量
