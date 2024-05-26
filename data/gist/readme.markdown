@@ -10,6 +10,10 @@
 
 ```bash
 wget http://ann-benchmarks.com/gist-960-euclidean.hdf5
+
+# or
+
+wget ftp://ftp.irisa.fr/local/texmex/corpus/gist.tar.gz
 ```
 
 ## 导出数据
