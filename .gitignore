@@ -12,3 +12,8 @@ test
 !test/
 debug
 cmake-build-debug
+reference_answer
+gnd
+*.bvecs
+*.tar.gz
+*.binary

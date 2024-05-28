@@ -1,6 +1,5 @@
 #pragma once
 
-#include <iostream>
 #include <map>
 #include <queue>
 #include <random>
@@ -448,16 +447,21 @@ namespace HSG
             Similarity(index, target_vector, pool, waiting_vectors);
         }
 
+        while (index.parameters.short_edge_lower_limit < nearest_neighbors.size())
+        {
+            nearest_neighbors.pop();
+        }
+
         auto &farest_neighbor_distance = nearest_neighbors.top().first;
 
         // 去重
         // long_path 和 short_path 中可能有 nearest_neighbors 中的顶点，将它们删除
-        while (!short_path.empty() && short_path.back().second <= farest_neighbor_distance)
+        while (!short_path.empty() && short_path.back().first <= farest_neighbor_distance)
         {
             short_path.pop_back();
         }
 
-        while (!long_path.empty() && long_path.back().second <= farest_neighbor_distance)
+        while (!long_path.empty() && long_path.back().first <= farest_neighbor_distance)
         {
             long_path.pop_back();
         }
@@ -465,11 +469,11 @@ namespace HSG
 
     inline bool Connected(const Index &index, const Vector &vector, Offset offset)
     {
-        auto visited = std::vector<bool>(index.vectors.size(), false);
-        visited[vector.offset] = true;
-        auto last = std::unordered_set<Offset>();
-        last.insert(vector.offset);
-        auto next = std::unordered_set<Offset>();
+        auto visited = std::unordered_set<Offset>();
+        visited.insert(vector.offset);
+        auto last = std::vector<Offset>();
+        last.push_back(vector.offset);
+        auto next = std::vector<Offset>();
 
         for (auto round = 0; round < 4; ++round)
         {
@@ -481,10 +485,10 @@ namespace HSG
                 {
                     auto &t1 = iterator->first;
 
-                    if (!visited[t1])
+                    if (!visited.contains(t1))
                     {
-                        visited[t1] = true;
-                        next.insert(t1);
+                        visited.insert(t1);
+                        next.push_back(t1);
                     }
                 }
 
@@ -492,10 +496,10 @@ namespace HSG
                 {
                     auto &t1 = iterator->second;
 
-                    if (!visited[t1])
+                    if (!visited.contains(t1))
                     {
-                        visited[t1] = true;
-                        next.insert(t1);
+                        visited.insert(t1);
+                        next.push_back(t1);
                     }
                 }
 
@@ -503,18 +507,21 @@ namespace HSG
                 {
                     auto &t1 = *iterator;
 
-                    if (!visited[t1])
+                    if (!visited.contains(t1))
                     {
-                        visited[t1] = true;
-                        next.insert(t1);
+                        visited.insert(t1);
+                        next.push_back(t1);
                     }
                 }
             }
 
-            if (visited[offset])
+            if (visited.contains(offset))
             {
                 return true;
             }
+
+            std::swap(last, next);
+            next.clear();
         }
 
         return false;
@@ -541,11 +548,11 @@ namespace HSG
         }
         else if (index.parameters.cover_range < short_path.size())
         {
-            auto &last_offset = long_path.back().second;
-            auto &last = index.vectors[last_offset];
+            auto last_offset = long_path.back().second;
 
             for (auto i = index.parameters.cover_range; i < short_path.size(); i += index.parameters.cover_range + 1)
             {
+                auto &last = index.vectors[last_offset];
                 auto &next_offset = short_path[i].second;
                 auto &next = index.vectors[next_offset];
                 auto distance = index.similarity(last.data, next.data, index.parameters.dimension);
@@ -554,7 +561,6 @@ namespace HSG
                 next.long_edge_in.insert({last_offset, distance});
 
                 last_offset = next_offset;
-                last = next;
             }
         }
     }
@@ -562,7 +568,7 @@ namespace HSG
     // 添加
     inline void Add(Index &index, const ID id, const float *const added_vector_data)
     {
-        auto offset = uint64_t(index.vectors.size());
+        Offset offset = index.vectors.size();
         ++index.count;
 
         if (index.empty.empty())
@@ -761,8 +767,8 @@ namespace HSG
     {
         Transfer_LEI(index, from, to);
         Transfer_LEO(index, from, to);
-        from.long_edge_in.clear();
-        from.long_edge_out.clear();
+        // from.long_edge_in.clear();
+        // from.long_edge_out.clear();
     }
 
     // 通过转移长边到距离被删除向量最近的向量修补长边
@@ -813,7 +819,7 @@ namespace HSG
     inline void Erase(Index &index, const ID removed_vector_id)
     {
         auto removed_vector_offset = Get_Offset(index, removed_vector_id);
-        auto removed_vector = index.vectors[removed_vector_offset];
+        auto &removed_vector = index.vectors[removed_vector_offset];
 
         // 删除短边的出边
         for (auto iterator = removed_vector.short_edge_out.begin(); iterator != removed_vector.short_edge_out.end();
@@ -861,40 +867,36 @@ namespace HSG
                 auto waiting_vectors = std::priority_queue<std::pair<float, Offset>,
                                                            std::vector<std::pair<float, Offset>>, std::greater<>>();
 
+                auto pool = std::vector<Offset>();
+
                 for (auto iterator = repaired_vector.short_edge_in.begin();
                      iterator != repaired_vector.short_edge_in.end(); ++iterator)
                 {
                     auto &neighbor_offset = iterator->first;
-                    visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    Visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    Get_Pool_From_SE(neighbor_vector, visited, pool);
+                    Similarity(index, repaired_vector.data, pool, waiting_vectors);
                 }
 
                 for (auto iterator = repaired_vector.short_edge_out.begin();
                      iterator != repaired_vector.short_edge_out.end(); ++iterator)
                 {
                     auto &neighbor_offset = iterator->second;
-                    visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    Visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    Get_Pool_From_SE(neighbor_vector, visited, pool);
+                    Similarity(index, repaired_vector.data, pool, waiting_vectors);
                 }
 
                 for (auto iterator = repaired_vector.keep_connected.begin();
                      iterator != repaired_vector.keep_connected.end(); ++iterator)
                 {
                     auto &neighbor_offset = *iterator;
-                    visited[neighbor_offset] = true;
                     auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                    Visit_SEI(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_SEO(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_KC(index, neighbor_vector, removed_vector.data, visited, waiting_vectors);
+                    Get_Pool_From_SE(neighbor_vector, visited, pool);
+                    Similarity(index, repaired_vector.data, pool, waiting_vectors);
                 }
 
                 while (!waiting_vectors.empty())
@@ -923,9 +925,8 @@ namespace HSG
                         }
                     }
 
-                    Visit_SEI(index, processing_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_SEO(index, processing_vector, removed_vector.data, visited, waiting_vectors);
-                    Visit_KC(index, processing_vector, removed_vector.data, visited, waiting_vectors);
+                    Get_Pool_From_SE(processing_vector, visited, pool);
+                    Similarity(index, repaired_vector.data, pool, waiting_vectors);
                 }
 
                 while (nearest_neighbors.size() != 1)
@@ -1055,55 +1056,89 @@ namespace HSG
     // }
 
     // Breadth First Search through Short Edges.
-    inline void BFS_Through_SE(const Index &index, const Vector &start, std::vector<bool> &covered)
+    inline void BFS_Through_SE(const Index &index, const Vector &start, std::vector<bool> &VC)
     {
-        // 使用队列实现index.parameters.cover_range轮广度优先短边遍历
-        // 首先定义队列并将开始节点入队
-        std::queue<std::pair<uint64_t, int>> queue;
-        queue.push(std::pair<uint64_t, int>(start.offset, 0));
-        covered.at(start.offset) = true;
-        // 直到队列为空，即所有短边能到达的点都被遍历过，或者轮数达到index.parameters.cover_range轮，才结束遍历
-        while (!queue.empty())
+        auto last = std::vector<Offset>();
+        last.push_back(start.offset);
+        auto next = std::vector<Offset>();
+
+        for (auto i = 1; i < index.parameters.cover_range; ++i)
         {
-            // 取出队列首部的Vector和深度depth
-            const Vector &current_vector = index.vectors[queue.front().first];
-            int depth = queue.front().second;
-            // 如果此时深度depth已经超过要遍历的轮数，则直接结束遍历
-            if (depth == index.parameters.cover_range)
-                return;
-            queue.pop();
-            // 遍历当前节点的所有短边出边
-            for (auto it = current_vector.short_edge_out.begin(); it != current_vector.short_edge_out.end(); ++it)
+            for (auto j = 0; j < last.size(); ++j)
             {
-                // 弧尾即为邻居节点的offset
-                uint64_t neighbor_offset = it->first;
-                // 如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
-                if (!covered.at(neighbor_offset))
+                auto &offset = last[j];
+                auto &vector = index.vectors[offset];
+
+                for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
                 {
-                    // 入队<节点offset,深度加一>
-                    queue.push(std::pair<uint64_t, int>(neighbor_offset, depth + 1));
-                    covered.at(neighbor_offset) = true;
+                    auto &neighbor_offset = iterator->first;
+
+                    if (!VC[neighbor_offset])
+                    {
+                        VC[neighbor_offset] = true;
+                        next.push_back(neighbor_offset);
+                    }
+                }
+
+                for (auto iterator = vector.short_edge_out.begin(); iterator != vector.short_edge_out.end(); ++iterator)
+                {
+                    auto &neighbor_offset = iterator->second;
+
+                    if (!VC[neighbor_offset])
+                    {
+                        VC[neighbor_offset] = true;
+                        next.push_back(neighbor_offset);
+                    }
+                }
+
+                for (auto iterator = vector.keep_connected.begin(); iterator != vector.keep_connected.end(); ++iterator)
+                {
+                    auto &neighbor_offset = *iterator;
+
+                    if (!VC[neighbor_offset])
+                    {
+                        VC[neighbor_offset] = true;
+                        next.push_back(neighbor_offset);
+                    }
                 }
             }
-            // 短边入边
-            for (auto it = current_vector.short_edge_in.begin(); it != current_vector.short_edge_in.end(); ++it)
+
+            std::swap(last, next);
+            next.clear();
+        }
+
+        for (auto i = 0; i < last.size(); ++i)
+        {
+            auto &offset = last[i];
+            auto &vector = index.vectors[offset];
+
+            for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
             {
-                // 弧尾即为邻居节点的offset
-                uint64_t neighbor_offset = it->first;
-                // 如果短边邻居节点未被访问过，则将其加入队列并标记为已访问
-                if (!covered.at(neighbor_offset))
+                auto &neighbor_offset = iterator->first;
+
+                if (!VC[neighbor_offset])
                 {
-                    // 入队<节点offset,深度加一>
-                    queue.push(std::pair<uint64_t, int>(neighbor_offset, depth + 1));
-                    covered.at(neighbor_offset) = true;
+                    VC[neighbor_offset] = true;
                 }
             }
-            for (const auto &offset : current_vector.keep_connected)
+
+            for (auto iterator = vector.short_edge_out.begin(); iterator != vector.short_edge_out.end(); ++iterator)
             {
-                if (!covered.at(offset))
-                { // 入队<节点offset,深度加一>
-                    queue.push(std::pair<uint64_t, int>(offset, depth + 1));
-                    covered.at(offset) = true;
+                auto &neighbor_offset = iterator->second;
+
+                if (!VC[neighbor_offset])
+                {
+                    VC[neighbor_offset] = true;
+                }
+            }
+
+            for (auto iterator = vector.keep_connected.begin(); iterator != vector.keep_connected.end(); ++iterator)
+            {
+                auto &neighbor_offset = *iterator;
+
+                if (!VC[neighbor_offset])
+                {
+                    VC[neighbor_offset] = true;
                 }
             }
         }
@@ -1112,43 +1147,53 @@ namespace HSG
     // 通过长边进行广度优先遍历
     //
     //  Breadth First Search Through Long Edges Out.
-    inline void BFS_Through_LEO(const Index &index, std::vector<bool> &covered)
+    inline void BFS_Through_LEO(const Index &index, std::unordered_set<Offset> &VR, std::vector<bool> &VC)
     {
-        // 广度优先遍历使用队列实现
-        // 定义队列
-        std::queue<uint64_t> queue;
-        // 将起始点加入队列，并标记为已访问
-        queue.push(index.vectors[0].offset);
-        BFS_Through_SE(index, index.vectors[0], covered);
-        while (!queue.empty())
+        auto last = std::vector<Offset>();
+        last.push_back(0);
+        auto next = std::vector<Offset>();
+
+        while (!last.empty())
         {
-            // 取出队列首部的Vector
-            const Vector &current_vector = index.vectors[queue.front()];
-            queue.pop();
-            // 遍历当前节点的所有长边出边
-            for (auto it = current_vector.long_edge_out.begin(); it != current_vector.long_edge_out.end(); ++it)
+            for (auto i = 0; i < last.size(); ++i)
             {
-                uint64_t neighbor_offset = it->first;
-                // 如果长边邻居节点未被访问过，则将其加入队列并标记为已访问
-                if (!covered.at(neighbor_offset))
+                auto &offset = last[i];
+                auto &vector = index.vectors[offset];
+
+                for (auto iterator = vector.long_edge_out.begin(); iterator != vector.long_edge_out.end(); ++iterator)
                 {
-                    queue.push(neighbor_offset);
-                    BFS_Through_SE(index, index.vectors[neighbor_offset], covered);
+                    auto &neighbor_offset = iterator->first;
+
+                    if (!VR.contains(neighbor_offset))
+                    {
+                        VR.insert(neighbor_offset);
+                        VC[neighbor_offset] = true;
+                        next.push_back(neighbor_offset);
+                    }
                 }
             }
+
+            std::swap(last, next);
+            next.clear();
         }
     }
 
     // 计算覆盖率
     inline float Calculate_Coverage(const Index &index)
     {
-        std::vector<bool> covered(index.vectors.size(), false);
+        auto VC = std::vector<bool>(index.vectors.size(), false);
+        auto VR = std::unordered_set<Offset>();
+        VR.insert(0);
+        BFS_Through_LEO(index, VR, VC);
 
-        BFS_Through_LEO(index, covered);
+        for (auto i = VR.begin(); i != VR.end(); ++i)
+        {
+            BFS_Through_SE(index, index.vectors[*i], VC);
+        }
 
-        auto number = (uint64_t)0;
+        uint64_t number = 0;
 
-        for (auto i : covered)
+        for (auto i : VC)
         {
             if (i)
             {
@@ -1156,7 +1201,7 @@ namespace HSG
             }
         }
 
-        return (float)number / index.count;
+        return float(number - 1) / index.count;
     }
 
     inline uint64_t Calculate_Benefits(const Index &index, const std::unordered_set<Offset> &missed, const Offset start)
@@ -1254,8 +1299,8 @@ namespace HSG
     // 计算为哪个顶点补长边可以覆盖的顶点最多
     inline Offset Max_Benefits(const Index &index, std::unordered_set<Offset> &missed)
     {
-        auto max_benefits = (uint64_t)0;
-        auto max_benefit_offset = 0;
+        uint64_t max_benefits = 0;
+        uint64_t max_benefit_offset = 0;
 
         for (auto iterator = missed.begin(); iterator != missed.end(); ++iterator)
         {
@@ -1275,15 +1320,22 @@ namespace HSG
     // 优化索引结构
     inline void Optimize(Index &index)
     {
-        std::vector<bool> covered(index.vectors.size(), false);
+        auto VC = std::vector<bool>(index.vectors.size(), false);
+        auto VR = std::unordered_set<Offset>();
+        VR.insert(0);
+        BFS_Through_LEO(index, VR, VC);
 
-        BFS_Through_LEO(index, covered);
+        for (auto i = VR.begin(); i != VR.end(); ++i)
+        {
+            BFS_Through_SE(index, index.vectors[*i], VC);
+        }
 
+        VR.clear();
         auto missed = std::unordered_set<Offset>();
 
-        for (auto offset = 0; offset < covered.size(); ++offset)
+        for (auto offset = 0; offset < VC.size(); ++offset)
         {
-            if (!offset && index.vectors[offset].data != nullptr)
+            if (!VC[offset] && index.vectors[offset].data != nullptr)
             {
                 missed.insert(offset);
             }

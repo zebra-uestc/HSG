@@ -1,0 +1,31 @@
+data=fashion-mnist
+./binary/release/WRA \
+    ./data/${data}/train \
+    ./data/${data}/test \
+    ./data/${data}/neighbors \
+    ./data/${data}/reference_answer \
+    ${data}
+
+data=sift
+./binary/release/WRA \
+    ./data/${data}/train \
+    ./data/${data}/test \
+    ./data/${data}/neighbors \
+    ./data/${data}/reference_answer \
+    ${data}
+
+data=gist
+./binary/release/WRA \
+    ./data/${data}/train \
+    ./data/${data}/test \
+    ./data/${data}/neighbors \
+    ./data/${data}/reference_answer \
+    ${data}
+
+data=sift1B
+./binary/release/WRA \
+    ./data/${data}/bigann_base.bvecs \
+    ./data/${data}/bigann_query.bvecs \
+    ./data/${data}/gnd/idx_10M.ivecs \
+    ./data/${data}/reference_answer \
+    ${data}
