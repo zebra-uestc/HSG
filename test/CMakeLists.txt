@@ -1,10 +1,14 @@
-add_executable(PT EXCLUDE_FROM_ALL PT.cpp)
-target_include_directories(PT PRIVATE .)
-target_include_directories(PT PRIVATE ../source)
+add_executable(performence EXCLUDE_FROM_ALL performence.cpp)
+target_include_directories(performence PRIVATE .)
+target_include_directories(performence PRIVATE ../source)
 
 add_executable(debug debug.cpp)
 target_include_directories(debug PRIVATE .)
 target_include_directories(debug PRIVATE ../source)
+
+add_executable(optimize EXCLUDE_FROM_ALL optimize.cpp)
+target_include_directories(optimize PRIVATE .)
+target_include_directories(optimize PRIVATE ../source)
 
 add_executable(hnsw EXCLUDE_FROM_ALL hnsw.cpp)
 target_include_directories(hnsw PRIVATE .)

@@ -1164,7 +1164,7 @@ namespace HSG
                 {
                     auto &neighbor_offset = iterator->first;
 
-                    if (!VR.contains(neighbor_offset))
+                    if (!VC[neighbor_offset])
                     {
                         VR.insert(neighbor_offset);
                         VC[neighbor_offset] = true;
@@ -1297,7 +1297,7 @@ namespace HSG
     }
 
     // 计算为哪个顶点补长边可以覆盖的顶点最多
-    inline Offset Max_Benefits(const Index &index, std::unordered_set<Offset> &missed)
+    inline Offset Max_Benefits(const Index &index, const std::unordered_set<Offset> &missed)
     {
         uint64_t max_benefits = 0;
         uint64_t max_benefit_offset = 0;
@@ -1343,12 +1343,37 @@ namespace HSG
 
         auto offset = Max_Benefits(index, missed);
         auto &vector = index.vectors[offset];
-        auto nearest_neighbors = std::priority_queue<std::pair<float, Offset>>();
-        auto long_path = std::vector<std::pair<float, Offset>>();
-        auto short_path = std::vector<std::pair<float, Offset>>();
+        auto visited = std::unordered_set<Offset>();
+        Offset last = 0;
+        auto LD = Space::Euclidean2::zero(vector.data, index.parameters.dimension);
 
-        Search_Add(index, vector.data, long_path, short_path, nearest_neighbors);
-        Add_Long_Edges(index, long_path, short_path, vector);
+        while (true)
+        {
+            auto &LV = index.vectors[last];
+            bool end = true;
+
+            for (auto i = LV.long_edge_out.begin(); i != LV.long_edge_out.end(); ++i)
+            {
+                auto &next = i->first;
+                auto &NV = index.vectors[next];
+                auto distance = index.similarity(vector.data, NV.data, index.parameters.dimension);
+
+                if (distance < LD)
+                {
+                    LD = distance;
+                    last = next;
+                    end = false;
+                }
+            }
+
+            if (end)
+            {
+                break;
+            }
+        }
+
+        index.vectors[last].long_edge_out.insert({offset, LD});
+        vector.long_edge_in.insert({last, LD});
     }
 
 } // namespace HSG

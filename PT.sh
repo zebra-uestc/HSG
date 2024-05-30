@@ -1,10 +1,10 @@
 #!/bin/bash
 
-cmake --build build --config Release --target PT
+cmake --build build --config Release --target performence
 
 data=fashion-mnist
 numactl --cpunodebind=0 --localalloc \
-    ./binary/release/PT \
+    ./binary/release/performence \
     ./data/${data}/train \
     ./data/${data}/test \
     ./data/${data}/neighbors \
@@ -29,7 +29,7 @@ done
 
 # data=sift
 # numactl --cpunodebind=0 --localalloc \
-#     ./binary/release/PT \
+#     ./binary/release/performence \
 #     ./data/${data}/train \
 #     ./data/${data}/test \
 #     ./data/${data}/neighbors \
@@ -54,7 +54,7 @@ done
 
 # data=gist
 # numactl --cpunodebind=0 --localalloc \
-#     ./binary/release/PT \
+#     ./binary/release/performence \
 #     ./data/${data}/train \
 #     ./data/${data}/test \
 #     ./data/${data}/neighbors \
@@ -80,7 +80,7 @@ done
 
 # data=sift1B
 # numactl --cpunodebind=0 --localalloc \
-#     ./binary/release/PT \
+#     ./binary/release/performence \
 #     ./data/${data}/bigann_base.bvecs \
 #     ./data/${data}/bigann_query.bvecs \
 #     ./data/${data}/gnd/idx_10M.ivecs \
