@@ -30,7 +30,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = HSG::search(index, test[i].data(), neighbors[i].size(), search_magnification);
+        auto query_result = HSG::Search(index, test[i].data(), neighbors[i].size(), search_magnification);
         auto end = std::chrono::high_resolution_clock::now();
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
         auto hit = verify(train, test[i], reference_answer[i], query_result);

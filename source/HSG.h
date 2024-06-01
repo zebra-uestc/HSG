@@ -767,8 +767,8 @@ namespace HSG
     {
         Transfer_LEI(index, from, to);
         Transfer_LEO(index, from, to);
-        // from.long_edge_in.clear();
-        // from.long_edge_out.clear();
+        from.long_edge_in.clear();
+        from.long_edge_out.clear();
     }
 
     // 通过转移长边到距离被删除向量最近的向量修补长边
@@ -819,6 +819,7 @@ namespace HSG
     inline void Erase(Index &index, const ID removed_vector_id)
     {
         auto removed_vector_offset = Get_Offset(index, removed_vector_id);
+        index.id_to_offset.erase(removed_vector_id);
         auto &removed_vector = index.vectors[removed_vector_offset];
 
         // 删除短边的出边
@@ -838,12 +839,38 @@ namespace HSG
             auto &vector = index.vectors[neighbor_offset];
             auto temporary_iterator = vector.short_edge_out.find(distance);
 
-            while (temporary_iterator->second != removed_vector_id)
+            while (temporary_iterator->second != removed_vector_offset)
             {
                 ++temporary_iterator;
             }
 
             vector.short_edge_out.erase(temporary_iterator);
+        }
+
+        for (auto iterator = removed_vector.keep_connected.begin(); iterator != removed_vector.keep_connected.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = *iterator;
+            auto &vector = index.vectors[neighbor_offset];
+
+            vector.keep_connected.erase(removed_vector_offset);
+        }
+
+        // 删除长边
+        for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            neighbor_vector.long_edge_in.erase(removed_vector_offset);
+        }
+
+        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
+             ++iterator)
+        {
+            auto &neighbor_offset = iterator->first;
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+            neighbor_vector.long_edge_out.erase(removed_vector_offset);
         }
 
         // 补边
@@ -940,23 +967,6 @@ namespace HSG
             }
         }
 
-        // 删除长边
-        for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
-             ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
-            neighbor_vector.long_edge_in.erase(removed_vector_offset);
-        }
-
-        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
-             ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
-            neighbor_vector.long_edge_out.erase(removed_vector_offset);
-        }
-
         // 如果长边不多
         // repair_LE_weight(index, removed_vector);
         // 否则
@@ -966,7 +976,7 @@ namespace HSG
     }
 
     // 查询距离目标向量最近的top-k个向量
-    inline std::priority_queue<std::pair<float, ID>> search(const Index &index, const float *const target_vector,
+    inline std::priority_queue<std::pair<float, ID>> Search(const Index &index, const float *const target_vector,
                                                             const uint64_t top_k, const uint64_t magnification)
     {
         // 优先队列
@@ -1058,6 +1068,8 @@ namespace HSG
     // Breadth First Search through Short Edges.
     inline void BFS_Through_SE(const Index &index, const Vector &start, std::vector<bool> &VC)
     {
+        auto visited = std::unordered_set<Offset>();
+        visited.insert(start.offset);
         auto last = std::vector<Offset>();
         last.push_back(start.offset);
         auto next = std::vector<Offset>();
@@ -1066,15 +1078,16 @@ namespace HSG
         {
             for (auto j = 0; j < last.size(); ++j)
             {
-                auto &offset = last[j];
-                auto &vector = index.vectors[offset];
+                const auto &offset = last[j];
+                const auto &vector = index.vectors[offset];
 
                 for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
                 {
                     auto &neighbor_offset = iterator->first;
 
-                    if (!VC[neighbor_offset])
+                    if (!visited.contains(neighbor_offset))
                     {
+                        visited.insert(neighbor_offset);
                         VC[neighbor_offset] = true;
                         next.push_back(neighbor_offset);
                     }
@@ -1084,8 +1097,9 @@ namespace HSG
                 {
                     auto &neighbor_offset = iterator->second;
 
-                    if (!VC[neighbor_offset])
+                    if (!visited.contains(neighbor_offset))
                     {
+                        visited.insert(neighbor_offset);
                         VC[neighbor_offset] = true;
                         next.push_back(neighbor_offset);
                     }
@@ -1095,8 +1109,9 @@ namespace HSG
                 {
                     auto &neighbor_offset = *iterator;
 
-                    if (!VC[neighbor_offset])
+                    if (!visited.contains(neighbor_offset))
                     {
+                        visited.insert(neighbor_offset);
                         VC[neighbor_offset] = true;
                         next.push_back(neighbor_offset);
                     }
@@ -1109,37 +1124,28 @@ namespace HSG
 
         for (auto i = 0; i < last.size(); ++i)
         {
-            auto &offset = last[i];
-            auto &vector = index.vectors[offset];
+            const auto &offset = last[i];
+            const auto &vector = index.vectors[offset];
 
             for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
             {
                 auto &neighbor_offset = iterator->first;
 
-                if (!VC[neighbor_offset])
-                {
-                    VC[neighbor_offset] = true;
-                }
+                VC[neighbor_offset] = true;
             }
 
             for (auto iterator = vector.short_edge_out.begin(); iterator != vector.short_edge_out.end(); ++iterator)
             {
                 auto &neighbor_offset = iterator->second;
 
-                if (!VC[neighbor_offset])
-                {
-                    VC[neighbor_offset] = true;
-                }
+                VC[neighbor_offset] = true;
             }
 
             for (auto iterator = vector.keep_connected.begin(); iterator != vector.keep_connected.end(); ++iterator)
             {
                 auto &neighbor_offset = *iterator;
 
-                if (!VC[neighbor_offset])
-                {
-                    VC[neighbor_offset] = true;
-                }
+                VC[neighbor_offset] = true;
             }
         }
     }
@@ -1157,8 +1163,8 @@ namespace HSG
         {
             for (auto i = 0; i < last.size(); ++i)
             {
-                auto &offset = last[i];
-                auto &vector = index.vectors[offset];
+                const auto &offset = last[i];
+                const auto &vector = index.vectors[offset];
 
                 for (auto iterator = vector.long_edge_out.begin(); iterator != vector.long_edge_out.end(); ++iterator)
                 {
@@ -1211,22 +1217,28 @@ namespace HSG
         auto last = std::vector<Offset>();
         last.push_back(start);
         auto next = std::vector<Offset>();
+        uint64_t benefits = 0;
 
         for (auto i = 1; i < index.parameters.cover_range; ++i)
         {
             for (auto j = 0; j < last.size(); ++j)
             {
-                auto &offset = last[j];
-                auto &vector = index.vectors[offset];
+                const auto &offset = last[j];
+                const auto &vector = index.vectors[offset];
 
                 for (auto iterator = vector.short_edge_in.begin(); iterator != vector.short_edge_in.end(); ++iterator)
                 {
                     auto &neighbor_offset = iterator->first;
 
-                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    if (!visited.contains(neighbor_offset))
                     {
                         visited.insert(neighbor_offset);
                         next.push_back(neighbor_offset);
+
+                        if (missed.contains(neighbor_offset))
+                        {
+                            ++benefits;
+                        }
                     }
                 }
 
@@ -1234,10 +1246,15 @@ namespace HSG
                 {
                     auto &neighbor_offset = iterator->second;
 
-                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    if (!visited.contains(neighbor_offset))
                     {
                         visited.insert(neighbor_offset);
                         next.push_back(neighbor_offset);
+
+                        if (missed.contains(neighbor_offset))
+                        {
+                            ++benefits;
+                        }
                     }
                 }
 
@@ -1245,10 +1262,15 @@ namespace HSG
                 {
                     auto &neighbor_offset = *iterator;
 
-                    if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                    if (!visited.contains(neighbor_offset))
                     {
                         visited.insert(neighbor_offset);
                         next.push_back(neighbor_offset);
+
+                        if (missed.contains(neighbor_offset))
+                        {
+                            ++benefits;
+                        }
                     }
                 }
             }
@@ -1266,9 +1288,14 @@ namespace HSG
             {
                 auto &neighbor_offset = iterator->first;
 
-                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                if (!visited.contains(neighbor_offset))
                 {
                     visited.insert(neighbor_offset);
+
+                    if (missed.contains(neighbor_offset))
+                    {
+                        ++benefits;
+                    }
                 }
             }
 
@@ -1276,9 +1303,14 @@ namespace HSG
             {
                 auto &neighbor_offset = iterator->second;
 
-                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                if (!visited.contains(neighbor_offset))
                 {
                     visited.insert(neighbor_offset);
+
+                    if (missed.contains(neighbor_offset))
+                    {
+                        ++benefits;
+                    }
                 }
             }
 
@@ -1286,14 +1318,19 @@ namespace HSG
             {
                 auto &neighbor_offset = *iterator;
 
-                if (missed.contains(neighbor_offset) && !visited.contains(neighbor_offset))
+                if (!visited.contains(neighbor_offset))
                 {
                     visited.insert(neighbor_offset);
+
+                    if (missed.contains(neighbor_offset))
+                    {
+                        ++benefits;
+                    }
                 }
             }
         }
 
-        return visited.size();
+        return benefits;
     }
 
     // 计算为哪个顶点补长边可以覆盖的顶点最多

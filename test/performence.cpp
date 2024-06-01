@@ -69,7 +69,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
             auto hit = verify(train, test[i], reference_answer[i], query_result);
@@ -156,8 +156,7 @@ int main(int argc, char **argv)
         build_magnifications.push_back(temporary);
     }
 
-    done_number += short_edge_lower_limits.size() * short_edge_upper_limits.size() * cover_ranges.size() *
-                   build_magnifications.size();
+    done_number += short_edge_lower_limits.size() * cover_ranges.size() * build_magnifications.size();
 
     for (auto a = 0; a < short_edge_lower_limits.size(); ++a)
     {

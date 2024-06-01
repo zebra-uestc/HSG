@@ -1,6 +1,7 @@
 #include <ctime>
 #include <fstream>
 #include <iostream>
+#include <unordered_set>
 #include <vector>
 
 #include "../source/space.h"
@@ -237,4 +238,55 @@ inline void ivecs(const char *file_path, std::vector<std::vector<uint64_t>> &nei
     }
 
     file.close();
+}
+
+inline void load_deleted(const char *file_path, std::vector<uint64_t> &result)
+{
+    auto file = std::ifstream(file_path, std::ios::in | std::ios::binary);
+
+    uint64_t number = 0;
+    file.read((char *)&number, sizeof(uint64_t));
+
+    for (auto i = 0; i < number; ++i)
+    {
+        uint64_t temporary = 0;
+        file.read((char *)&temporary, sizeof(uint64_t));
+        result.push_back(temporary);
+    }
+}
+
+inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train, const std::vector<float> &test,
+                                   const std::vector<uint64_t> &neighbors, const std::vector<float> &reference_answer,
+                                   std::priority_queue<std::pair<float, uint64_t>> &query_result,
+                                   std::unordered_set<uint64_t> &relevant, uint64_t k)
+{
+    auto result = std::vector<float>(query_result.size(), 0);
+
+    while (!query_result.empty())
+    {
+        if (relevant.contains(query_result.top().second))
+        {
+            std::cout << "wrong!" << std::endl;
+            std::exit(0);
+        }
+
+        result[query_result.size() - 1] =
+            Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());
+        query_result.pop();
+    }
+
+    uint64_t hit = 0;
+
+    for (auto i = 0; hit < k && i < reference_answer.size(); ++i)
+    {
+        if (!relevant.contains(neighbors[i]))
+        {
+            if (result[hit] <= reference_answer[i])
+            {
+                ++hit;
+            }
+        }
+    }
+
+    return hit;
 }
