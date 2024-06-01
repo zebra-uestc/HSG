@@ -27,6 +27,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
     uint64_t total_hit = 0;
     uint64_t total_time = 0;
 
+    auto cover_rate = HSG::Calculate_Coverage(index);
+
+    std::cout << std::format("cover rate: {0:<6.4}", cover_rate) << std::endl;
+
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
@@ -59,7 +63,6 @@ int main(int argc, char **argv)
     test = load_vector(argv[2]);
     neighbors = load_neighbors(argv[3]);
     load_reference_answer(argv[4], reference_answer);
-    // reference_answer = get_reference_answer(train, test, neighbors);
 
     auto short_edge_lower_limit = std::stoull(argv[5]);
     auto short_edge_upper_limit = std::stoull(argv[6]);
