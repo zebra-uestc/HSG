@@ -11,7 +11,7 @@ numactl --physcpubind=23 --localalloc \
     ./data/${data}/neighbors \
     ./data/${data}/reference_answer \
     ${data} \
-    4 8 5 50 50
+    4 8 5 10 10
 
 # data=gist
 # numactl --physcpubind=23 --localalloc \

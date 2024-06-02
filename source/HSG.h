@@ -568,7 +568,7 @@ namespace HSG
                 long_path.pop_back();
             }
 
-            for (int i = long_path.size() - 2; 0 < i; --i)
+            for (int i = long_path.size() - 1; 0 < i; --i)
             {
                 const auto &distance = long_path[i].first;
                 const auto &neighbor_offset = long_path[i].second;
@@ -1337,7 +1337,9 @@ namespace HSG
     inline void BFS_Through_LEO(const Index &index, std::unordered_set<Offset> &VR, std::vector<bool> &VC)
     {
         auto last = std::vector<Offset>();
+
         last.push_back(0);
+
         auto next = std::vector<Offset>();
 
         while (!last.empty())
@@ -1370,7 +1372,9 @@ namespace HSG
     {
         auto VC = std::vector<bool>(index.vectors.size(), false);
         auto VR = std::unordered_set<Offset>();
+
         VR.insert(0);
+        VC[0] = true;
         BFS_Through_LEO(index, VR, VC);
 
         for (auto i = VR.begin(); i != VR.end(); ++i)
@@ -1388,11 +1392,13 @@ namespace HSG
             }
         }
 
-        return float(number - 1) / index.count;
+        return float(number - 1) / (index.count - 1);
     }
 
-    inline uint64_t Calculate_Benefits(const Index &index, const std::unordered_set<Offset> &missed, const Offset start)
+    inline bool Calculate_Benefits(const Index &index, const std::unordered_set<Offset> &missed, const Offset start,
+                                   uint64_t &benefits)
     {
+
         auto visited = std::unordered_set<Offset>();
 
         visited.insert(start);
@@ -1402,7 +1408,7 @@ namespace HSG
         last.push_back(start);
 
         auto next = std::vector<Offset>();
-        uint64_t benefits = 0;
+        uint64_t not_missed = 0;
 
         for (auto i = 1; i < index.parameters.cover_range; ++i)
         {
@@ -1424,6 +1430,10 @@ namespace HSG
                         {
                             ++benefits;
                         }
+                        else
+                        {
+                            ++not_missed;
+                        }
                     }
                 }
 
@@ -1440,6 +1450,10 @@ namespace HSG
                         {
                             ++benefits;
                         }
+                        else
+                        {
+                            ++not_missed;
+                        }
                     }
                 }
 
@@ -1455,6 +1469,10 @@ namespace HSG
                         if (missed.contains(neighbor_offset))
                         {
                             ++benefits;
+                        }
+                        else
+                        {
+                            ++not_missed;
                         }
                     }
                 }
@@ -1481,6 +1499,10 @@ namespace HSG
                     {
                         ++benefits;
                     }
+                    else
+                    {
+                        ++not_missed;
+                    }
                 }
             }
 
@@ -1495,6 +1517,10 @@ namespace HSG
                     if (missed.contains(neighbor_offset))
                     {
                         ++benefits;
+                    }
+                    else
+                    {
+                        ++not_missed;
                     }
                 }
             }
@@ -1511,32 +1537,43 @@ namespace HSG
                     {
                         ++benefits;
                     }
+                    else
+                    {
+                        ++not_missed;
+                    }
                 }
             }
         }
 
-        return benefits;
+        if (not_missed * 10 < benefits)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     // 计算为哪个顶点补长边可以覆盖的顶点最多
-    inline Offset Max_Benefits(const Index &index, const std::unordered_set<Offset> &missed)
+    inline void Max_Benefits(const Index &index, const std::unordered_set<Offset> &missed, uint64_t &max_benefits,
+                             Offset &max_benefit_offset)
     {
-        uint64_t max_benefits = 0;
-        Offset max_benefit_offset = 0;
-
         for (auto iterator = missed.begin(); iterator != missed.end(); ++iterator)
         {
             auto offset = *iterator;
-            auto benefits = Calculate_Benefits(index, missed, offset);
+            uint64_t benefits = 0;
 
-            if (max_benefits < benefits)
+            if (Calculate_Benefits(index, missed, offset, benefits))
+            {
+                max_benefits = benefits;
+                max_benefit_offset = offset;
+                break;
+            }
+            else if (max_benefits < benefits)
             {
                 max_benefits = benefits;
                 max_benefit_offset = offset;
             }
         }
-
-        return max_benefit_offset;
     }
 
     inline void Search_Optimize(const Index &index, const Offset offset,
@@ -1661,7 +1698,9 @@ namespace HSG
     {
         auto VC = std::vector<bool>(index.vectors.size(), false);
         auto VR = std::unordered_set<Offset>();
+
         VR.insert(0);
+        VC[0] = true;
         BFS_Through_LEO(index, VR, VC);
 
         for (auto i = VR.begin(); i != VR.end(); ++i)
@@ -1669,7 +1708,6 @@ namespace HSG
             BFS_Through_SE(index, index.vectors[*i], VC);
         }
 
-        VR.clear();
         auto missed = std::unordered_set<Offset>();
 
         for (auto offset = 0; offset < VC.size(); ++offset)
@@ -1680,9 +1718,25 @@ namespace HSG
             }
         }
 
-        auto offset = Max_Benefits(index, missed);
+        std::cout << "The number of vertices that can be reached through long edges: " << VR.size() << std::endl;
+        std::cout << "Number of vertices covered: " << index.count - 1 - missed.size() << std::endl;
+        std::cout << "Coverage rate: " << (float)(index.count - 1 - missed.size()) / index.count << std::endl;
+        std::cout << "The number of vertices not covered: " << missed.size() << std::endl;
+
+        VR.clear();
+
+        uint64_t offset = 0;
+        Offset benefits = 0;
+
+        Max_Benefits(index, missed, benefits, offset);
+
+        const auto &id = index.vectors[offset].id;
         auto visited = std::unordered_set<Offset>();
         auto long_path = std::vector<std::pair<float, Offset>>();
+
+        std::cout << std::format("Vertices with added long edges(id, offset): ({0}, {1})", id, offset) << std::endl;
+        std::cout << "Add a long edge to this vertex to cover an additional number of vertices: " << benefits
+                  << std::endl;
 
         Search_Optimize(index, offset, long_path);
         Add_Long_Edges_Optimize(index, long_path, offset);
