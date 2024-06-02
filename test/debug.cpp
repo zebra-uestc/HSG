@@ -43,6 +43,26 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
 
     std::cout << std::format("total hit: {0:<13} average time(us): {1:<13}", total_hit, total_time / test.size())
               << std::endl;
+
+    total_hit = 0;
+    total_time = 0;
+    HSG::Optimize(index);
+    cover_rate = HSG::Calculate_Coverage(index);
+
+    std::cout << std::format("cover rate: {0:<6.4}", cover_rate) << std::endl;
+
+    for (auto i = 0; i < test.size(); ++i)
+    {
+        auto begin = std::chrono::high_resolution_clock::now();
+        auto query_result = HSG::Search(index, test[i].data(), neighbors[i].size(), search_magnification);
+        auto end = std::chrono::high_resolution_clock::now();
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+        auto hit = verify(train, test[i], reference_answer[i], query_result);
+        total_hit += hit;
+    }
+
+    std::cout << std::format("total hit: {0:<13} average time(us): {1:<13}", total_hit, total_time / test.size())
+              << std::endl;
 }
 
 int main(int argc, char **argv)
