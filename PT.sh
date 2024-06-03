@@ -4,10 +4,10 @@ cmake --build build --config Release --target performence
 
 data=fashion-mnist
 
-LL=(4 8 16 32)
-UL=(8 16 32 64)
+LL=(4 8 16)
+UL=(8 16 32)
 CR=(4 5 6 7)
-BM=(30 50 100)
+BM=(30 50 100 200 400 800)
 
 numactl --physcpubind=0,2,4,6,8,10 --localalloc \
     ./binary/release/performence \

@@ -58,7 +58,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
 
         auto cover_rate = HSG::Calculate_Coverage(index);
 
-        test_result << std::format("cover rate: {0:<4.4}% total hit: {1:<10} average time: {2:<10}us", cover_rate * 100,
+        test_result << std::format("cover rate: {0:<6.4}% total hit: {1:<10} average time: {2:<10}us", cover_rate * 100,
                                    total_hit, total_time / test.size())
                     << std::endl;
 

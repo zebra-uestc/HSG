@@ -530,7 +530,7 @@ namespace HSG
     }
 
     // 计算角A的余弦值
-
+    //
     // 余弦值没有除以2
     inline float Cosine_Value(const float a, const float b, const float c)
     {
@@ -547,46 +547,26 @@ namespace HSG
         {
             bool added = false;
 
-            if (vector.zero < long_path.back().first)
-            {
-                const auto &distance = long_path.back().first;
-                const auto &neighbor_offset = long_path.back().second;
-                auto &neighbor_vector = index.vectors[neighbor_offset];
-
-                if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
-                {
-                    vector.long_edge_out.insert({neighbor_offset, distance});
-                    neighbor_vector.long_edge_in.insert({offset, distance});
-
-                    const auto &last_offset = long_path[long_path.size() - 2].second;
-                    auto &last_vector = index.vectors[last_offset];
-
-                    last_vector.long_edge_out.erase(neighbor_offset);
-                    neighbor_vector.long_edge_in.erase(last_offset);
-                }
-
-                long_path.pop_back();
-            }
-
             for (int i = long_path.size() - 1; 0 < i; --i)
             {
                 const auto &distance = long_path[i].first;
                 const auto &neighbor_offset = long_path[i].second;
                 auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                if (!vector.short_edge_in.contains(neighbor_offset))
+                if (neighbor_vector.zero < vector.zero && !Adjacent(vector, neighbor_vector))
                 {
                     if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
                     {
                         neighbor_vector.long_edge_out.insert({offset, distance});
                         vector.long_edge_in.insert({neighbor_offset, distance});
+                        added = true;
                     }
                 }
             }
 
             if (!added)
             {
-                index.vectors[0].long_edge_out.insert({offset, vector.zero});
+                index.vectors.front().long_edge_out.insert({offset, vector.zero});
                 vector.long_edge_in.insert({0, vector.zero});
             }
         }
@@ -1560,18 +1540,18 @@ namespace HSG
         for (auto iterator = missed.begin(); iterator != missed.end(); ++iterator)
         {
             auto offset = *iterator;
-            uint64_t benefits = 0;
+            uint64_t benefits = 1;
+            bool end = Calculate_Benefits(index, missed, offset, benefits);
 
-            if (Calculate_Benefits(index, missed, offset, benefits))
+            if (max_benefits < benefits)
             {
                 max_benefits = benefits;
                 max_benefit_offset = offset;
-                break;
-            }
-            else if (max_benefits < benefits)
-            {
-                max_benefits = benefits;
-                max_benefit_offset = offset;
+
+                if (end)
+                {
+                    break;
+                }
             }
         }
     }
@@ -1645,30 +1625,7 @@ namespace HSG
                                         const Offset offset)
     {
         auto &vector = index.vectors[offset];
-
         bool added = false;
-
-        if (vector.zero < long_path.back().first)
-        {
-
-            const auto &distance = long_path.back().first;
-            const auto &neighbor_offset = long_path.back().second;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
-
-            if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
-            {
-                vector.long_edge_out.insert({neighbor_offset, distance});
-                neighbor_vector.long_edge_in.insert({offset, distance});
-
-                const auto &last_offset = long_path[long_path.size() - 2].second;
-                auto &last_vector = index.vectors[last_offset];
-
-                last_vector.long_edge_out.erase(neighbor_offset);
-                neighbor_vector.long_edge_in.erase(last_offset);
-            }
-
-            long_path.pop_back();
-        }
 
         for (int i = long_path.size() - 1; 0 < i; --i)
         {
@@ -1676,19 +1633,20 @@ namespace HSG
             const auto &neighbor_offset = long_path[i].second;
             auto &neighbor_vector = index.vectors[neighbor_offset];
 
-            if (!vector.short_edge_in.contains(neighbor_offset))
+            if (neighbor_vector.zero < vector.zero && !Adjacent(vector, neighbor_vector))
             {
                 if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
                 {
                     neighbor_vector.long_edge_out.insert({offset, distance});
                     vector.long_edge_in.insert({neighbor_offset, distance});
+                    added = true;
                 }
             }
         }
 
         if (!added)
         {
-            index.vectors[0].long_edge_out.insert({offset, vector.zero});
+            index.vectors.front().long_edge_out.insert({offset, vector.zero});
             vector.long_edge_in.insert({0, vector.zero});
         }
     }
@@ -1725,8 +1683,8 @@ namespace HSG
 
         VR.clear();
 
-        uint64_t offset = 0;
-        Offset benefits = 0;
+        Offset offset = 0;
+        uint64_t benefits = 0;
 
         Max_Benefits(index, missed, benefits, offset);
 
