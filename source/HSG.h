@@ -327,12 +327,12 @@ namespace HSG
         auto pool = std::vector<Offset>();
 
         Get_Pool_From_SE(index.vectors[0], visited, pool);
-        Similarity(index, new_vector.data, pool, waiting_vectors);
+        Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
         auto &short_offset = waiting_vectors.top().second;
 
         Get_Pool_From_LEO(index.vectors[0], visited, pool);
-        Similarity(index, new_vector.data, pool, waiting_vectors);
+        Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
         auto &nearest_offset = waiting_vectors.top().second;
 
@@ -1682,6 +1682,7 @@ namespace HSG
         std::cout << "The number of vertices not covered: " << missed.size() << std::endl;
 
         VR.clear();
+        VC.clear();
 
         Offset offset = 0;
         uint64_t benefits = 0;
@@ -1689,7 +1690,6 @@ namespace HSG
         Max_Benefits(index, missed, benefits, offset);
 
         const auto &id = index.vectors[offset].id;
-        auto visited = std::unordered_set<Offset>();
         auto long_path = std::vector<std::pair<float, Offset>>();
 
         std::cout << std::format("Vertices with added long edges(id, offset): ({0}, {1})", id, offset) << std::endl;
