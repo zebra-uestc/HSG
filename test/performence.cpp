@@ -39,7 +39,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
                                short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification)
                 << std::endl;
 
-    auto search_magnifications = std::vector<uint64_t>{10, 30, 50};
+    auto search_magnifications = std::vector<uint64_t>{10, 30, 50, 100};
     test_result << "search magnifications: [" << search_magnifications[0];
 
     for (auto i = 1; i < search_magnifications.size(); ++i)
@@ -111,12 +111,25 @@ int main(int argc, char **argv)
 
     if (name == "sift1B")
     {
+        for (auto i = 0; i < 8; ++i)
+        {
+            available_thread.acquire();
+        }
+
         bvecs_vectors(argv[1], train, 10000000);
         bvecs_vectors(argv[2], test);
         ivecs(argv[3], neighbors);
     }
     else
     {
+        if (name == "gist")
+        {
+            for (auto i = 0; i < 4; ++i)
+            {
+                available_thread.acquire();
+            }
+        }
+
         train = load_vector(argv[1]);
         test = load_vector(argv[2]);
         neighbors = load_neighbors(argv[3]);

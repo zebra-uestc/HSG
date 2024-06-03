@@ -62,7 +62,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
                                    total_hit, total_time / test.size())
                     << std::endl;
 
-        if (cover_rate == 1)
+        if (0.999 < cover_rate)
         {
             break;
         }
