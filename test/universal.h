@@ -80,24 +80,25 @@ inline uint64_t verify(const std::vector<std::vector<float>> &train, const std::
 {
     auto result = std::vector<float>(query_result.size(), 0);
 
-    while (!query_result.empty())
+    while (100 < query_result.size())
     {
-        result[query_result.size() - 1] =
-            Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());
         query_result.pop();
     }
 
-    uint64_t hit = 0;
-
-    for (auto i = 0; i < 100; ++i)
+    for (uint64_t hit = 100; !query_result.empty(); --hit)
     {
-        if (result[hit] <= reference_answer[i])
+        auto distance =
+            Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());
+
+        if (distance <= reference_answer[99])
         {
-            ++hit;
+            return hit;
         }
+
+        query_result.pop();
     }
 
-    return hit;
+    return 0;
 }
 
 inline std::vector<std::vector<float>> load_vector(const char *file_path)
