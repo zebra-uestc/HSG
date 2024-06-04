@@ -15,24 +15,26 @@ std::vector<std::vector<float>> reference_answer;
 std::string name;
 std::vector<uint64_t> irrelevant;
 
-void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
-               uint64_t build_magnification, uint64_t search_magnification)
+void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_upper_limit, const uint64_t cover_range,
+               const uint64_t build_magnification, const uint64_t k, const uint64_t search_magnification)
 {
-    auto test_result =
-        std::ofstream(std::format("result/HSG/DB-{0}-{1}-{2}-{3}-{4}-{5}.txt", name, short_edge_lower_limit,
-                                  short_edge_upper_limit, cover_range, build_magnification, search_magnification),
-                      std::ios::app | std::ios::out);
-
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
+
+    auto test_result =
+        std::ofstream(std::format("result/HSG/DI-{0}-{1}-{2}-{3}-{4}-{5}.txt", name, UTC_time->tm_year + 1900,
+                                  UTC_time->tm_mon + 1, UTC_time->tm_mday, UTC_time->tm_hour + 8, UTC_time->tm_min),
+                      std::ios::app | std::ios::out);
+
     test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
                 << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
 
-    test_result << std::format("short edge lower limit: {0:<4} short edge upper limit: {1:<4} cover range: {2:<4} "
-                               "build magnification: {3:<4} search_magnification: {4:<3}",
-                               short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification,
-                               search_magnification)
-                << std::endl;
+    test_result << std::format("short edge lower limit: {0:<4}", short_edge_lower_limit) << std::endl;
+    test_result << std::format("short edge upper limit: {0:<4}", short_edge_upper_limit) << std::endl;
+    test_result << std::format("cover range: {0:<4}", cover_range) << std::endl;
+    test_result << std::format("build magnification: {0:<4}", build_magnification) << std::endl;
+    test_result << std::format("top k: {0:<4}", k) << std::endl;
+    test_result << std::format("search magnification: {0:<4}", search_magnification) << std::endl;
     test_result << std::format("irrelevant number: {0:<9}", irrelevant.size()) << std::endl;
 
     HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
@@ -41,6 +43,26 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
     for (auto i = 0; i < train.size(); ++i)
     {
         HSG::Add(index, i, train[i].data());
+    }
+
+    {
+        uint64_t total_hit = 0;
+        uint64_t total_time = 0;
+
+        for (auto i = 0; i < test.size(); ++i)
+        {
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
+            auto end = std::chrono::high_resolution_clock::now();
+            total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
+            total_hit += hit;
+        }
+
+        auto cover_rate = HSG::Calculate_Coverage(index);
+        test_result << std::format("cover rate: {0:<6.4} total hit: {1:<10} average time: {2:<10}us", cover_rate,
+                                   total_hit, total_time / test.size())
+                    << std::endl;
     }
 
     uint64_t irrelevant_number = 0;
@@ -59,10 +81,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -86,10 +108,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -113,10 +135,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -142,10 +164,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -169,10 +191,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -196,10 +218,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -240,15 +262,17 @@ int main(int argc, char **argv)
     }
 
     load_reference_answer(argv[4], reference_answer);
-    load_deleted(argv[11], irrelevant);
+    load_deleted(argv[12], irrelevant);
 
     auto short_edge_lower_limit = std::stoull(argv[6]);
     auto short_edge_upper_limit = std::stoull(argv[7]);
     auto cover_range = std::stoull(argv[8]);
     auto build_magnification = std::stoull(argv[9]);
-    auto search_magnification = std::stoull(argv[10]);
+    auto k = std::stoull(argv[10]);
+    auto search_magnification = std::stoull(argv[11]);
 
-    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, search_magnification);
+    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, k,
+              search_magnification);
 
     return 0;
 }

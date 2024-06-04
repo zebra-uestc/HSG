@@ -76,16 +76,14 @@ inline void load_reference_answer(const char *file_path, std::vector<std::vector
 
 inline uint64_t verify(const std::vector<std::vector<float>> &train, const std::vector<float> &test,
                        const std::vector<float> &reference_answer,
-                       std::priority_queue<std::pair<float, uint64_t>> &query_result)
+                       std::priority_queue<std::pair<float, uint64_t>> &query_result, uint64_t top_k)
 {
-    auto result = std::vector<float>(query_result.size(), 0);
-
-    while (100 < query_result.size())
+    while (top_k < query_result.size())
     {
         query_result.pop();
     }
 
-    for (uint64_t hit = 100; !query_result.empty(); --hit)
+    for (uint64_t hit = top_k; !query_result.empty(); --hit)
     {
         auto distance =
             Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());

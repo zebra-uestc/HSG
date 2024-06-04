@@ -22,7 +22,7 @@ data=gist
     ./data/${data}/reference_answer \
     ${data}
 
-data=sift1B
+data=sift10M
 ./binary/release/WRA \
     ./data/${data}/bigann_base.bvecs \
     ./data/${data}/bigann_query.bvecs \

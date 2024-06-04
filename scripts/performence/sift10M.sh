@@ -4,10 +4,11 @@ cmake --build build --config Release --target performence
 
 data=sift1B
 
-LL=(4 8 16 32)
-UL=(8 16 32 64)
+LL=(8 16 32)
+UL=(16 32 64)
 CR=(4 5 6 7)
-BM=(30 50 100)
+K=100
+BM=(30 50 100 200 400 800)
 
 numactl --cpunodebind=1 --localalloc \
     ./binary/release/performence \
@@ -19,16 +20,17 @@ numactl --cpunodebind=1 --localalloc \
     "${LL[*]}" \
     "${UL[*]}" \
     "${CR[*]}" \
+    ${K} \
     "${BM[*]}"
 
-for l in ${ll[*]}
+for l in ${LL[*]}
 do
     u=$(( 2 * ${l} ))
     for c in ${CR[*]}
     do
         for b in ${BM[*]}
         do
-            cat result/HSG/${data}-${l}-${u}-${c}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
+            cat result/HSG/${data}-${l}-${u}-${c}-${K}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
         done
     done
 done

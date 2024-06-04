@@ -16,28 +16,30 @@ std::vector<std::vector<uint64_t>> neighbors;
 std::vector<std::vector<float>> reference_answer;
 std::string name;
 
-auto available_thread = std::counting_semaphore<>(12);
+auto available_thread = std::counting_semaphore<>(0);
 auto done_semaphore = std::counting_semaphore<>(1);
 uint64_t done_thread = 0;
 uint64_t done_number = 0;
 auto done = std::counting_semaphore<>(0);
 
-void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
-               uint64_t build_magnification)
+void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_upper_limit, const uint64_t cover_range,
+               const uint64_t build_magnification, const uint64_t k)
 {
-    auto test_result = std::ofstream(std::format("result/HSG/{0}-{1}-{2}-{3}-{4}.txt", name, short_edge_lower_limit,
-                                                 short_edge_upper_limit, cover_range, build_magnification),
-                                     std::ios::app | std::ios::out);
-
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
+
+    auto test_result = std::ofstream(std::format("result/HSG/{0}-{1}-{2}-{3}-{4}-{5}.txt", name, short_edge_lower_limit,
+                                                 short_edge_upper_limit, cover_range, k, build_magnification),
+                                     std::ios::app | std::ios::out);
+
     test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
                 << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
 
-    test_result << std::format("short edge lower limit: {0:<4} short edge upper limit: {1:<4} cover range: {2:<4} "
-                               "build magnification: {3:<4}",
-                               short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification)
-                << std::endl;
+    test_result << std::format("short edge lower limit: {0:<4}", short_edge_lower_limit) << std::endl;
+    test_result << std::format("short edge upper limit: {0:<4}", short_edge_upper_limit) << std::endl;
+    test_result << std::format("cover range: {0:<4}", cover_range) << std::endl;
+    test_result << std::format("top k: {0:<4}", k) << std::endl;
+    test_result << std::format("build magnification: {0:<4}", build_magnification) << std::endl;
 
     auto search_magnifications = std::vector<uint64_t>{10, 30, 50, 100};
     test_result << "search magnifications: [" << search_magnifications[0];
@@ -69,10 +71,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         for (auto i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            auto query_result = HSG::Search(index, test[i].data(), 100, search_magnification);
+            auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify(train, test[i], reference_answer[i], query_result);
+            auto hit = verify(train, test[i], reference_answer[i], query_result, k);
             total_hit += hit;
         }
 
@@ -109,11 +111,11 @@ int main(int argc, char **argv)
 
     name = std::string(argv[5]);
 
-    if (name == "sift1B")
+    if (name == "sift10M")
     {
-        for (auto i = 0; i < 8; ++i)
+        for (auto i = 0; i < 4; ++i)
         {
-            available_thread.acquire();
+            available_thread.release();
         }
 
         bvecs_vectors(argv[1], train, 10000000);
@@ -124,9 +126,16 @@ int main(int argc, char **argv)
     {
         if (name == "gist")
         {
-            for (auto i = 0; i < 4; ++i)
+            for (auto i = 0; i < 8; ++i)
             {
-                available_thread.acquire();
+                available_thread.release();
+            }
+        }
+        else
+        {
+            for (auto i = 0; i < 12; ++i)
+            {
+                available_thread.release();
             }
         }
 
@@ -145,7 +154,8 @@ int main(int argc, char **argv)
     auto SELL = std::stringstream(argv[6]);
     auto SEUL = std::stringstream(argv[7]);
     auto CR = std::stringstream(argv[8]);
-    auto BM = std::stringstream(argv[9]);
+    auto k = std::stoull(argv[9]);
+    auto BM = std::stringstream(argv[10]);
 
     uint64_t temporary = 0;
 
@@ -185,7 +195,7 @@ int main(int argc, char **argv)
                 auto &build_magnification = build_magnifications[c];
                 available_thread.acquire();
                 auto one_thread = std::thread(base_test, short_edge_lower_limit, short_edge_upper_limit, cover_range,
-                                              build_magnification);
+                                              build_magnification, k);
                 one_thread.detach();
             }
         }

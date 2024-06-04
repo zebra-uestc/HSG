@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 {
     name = std::string(argv[5]);
 
-    if (name == "sift1B")
+    if (name == "sift10M")
     {
         bvecs_vectors(argv[1], train, 10000000);
         bvecs_vectors(argv[2], test);

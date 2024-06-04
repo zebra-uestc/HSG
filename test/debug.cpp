@@ -14,7 +14,7 @@ std::vector<std::vector<uint64_t>> neighbors;
 std::vector<std::vector<float>> reference_answer;
 
 void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
-               uint64_t build_magnification, uint64_t search_magnification)
+               uint64_t build_magnification, uint64_t top_k, uint64_t search_magnification)
 {
     HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
                      cover_range, build_magnification);
@@ -34,10 +34,10 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
     for (auto i = 0; i < test.size(); ++i)
     {
         auto begin = std::chrono::high_resolution_clock::now();
-        auto query_result = HSG::Search(index, test[i].data(), neighbors[i].size(), search_magnification);
+        auto query_result = HSG::Search(index, test[i].data(), top_k, search_magnification);
         auto end = std::chrono::high_resolution_clock::now();
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-        auto hit = verify(train, test[i], reference_answer[i], query_result);
+        auto hit = verify(train, test[i], reference_answer[i], query_result, top_k);
         total_hit += hit;
     }
 
@@ -57,7 +57,7 @@ void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit,
         auto query_result = HSG::Search(index, test[i].data(), neighbors[i].size(), search_magnification);
         auto end = std::chrono::high_resolution_clock::now();
         total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-        auto hit = verify(train, test[i], reference_answer[i], query_result);
+        auto hit = verify(train, test[i], reference_answer[i], query_result, top_k);
         total_hit += hit;
     }
 
@@ -88,9 +88,11 @@ int main(int argc, char **argv)
     auto short_edge_upper_limit = std::stoull(argv[6]);
     auto cover_range = std::stoull(argv[7]);
     auto build_magnification = std::stoull(argv[8]);
-    auto search_magnification = std::stoull(argv[9]);
+    auto top_k = std::stoull(argv[9]);
+    auto search_magnification = std::stoull(argv[10]);
 
-    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, search_magnification);
+    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, top_k,
+              search_magnification);
 
     return 0;
 }
