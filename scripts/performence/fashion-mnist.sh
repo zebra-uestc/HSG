@@ -6,7 +6,7 @@ data=fashion-mnist
 
 LL=(4 8 16)
 UL=(8 16 32)
-CR=(4 5 6 7)
+CR=(4 5 6)
 K=100
 BM=(30 50 100 200 400 800)
 
@@ -21,8 +21,9 @@ numactl --cpunodebind=0 --localalloc \
     "${LL[*]}" \
     "${UL[*]}" \
     "${CR[*]}" \
-    ${K} \
-    "${BM[*]}"
+    "${BM[*]}" \
+    ${K}
+
 
 for l in ${LL[*]}
 do
@@ -31,7 +32,7 @@ do
     do
         for b in ${BM[*]}
         do
-            cat result/HSG/${data}-${l}-${u}-${c}-${K}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
+            cat result/HSG/${data}-${l}-${u}-${c}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
         done
     done
 done

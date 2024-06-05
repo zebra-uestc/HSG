@@ -28,8 +28,8 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
 
-    auto test_result = std::ofstream(std::format("result/HSG/{0}-{1}-{2}-{3}-{4}-{5}.txt", name, short_edge_lower_limit,
-                                                 short_edge_upper_limit, cover_range, k, build_magnification),
+    auto test_result = std::ofstream(std::format("result/HSG/{0}-{1}-{2}-{3}-{4}.txt", name, short_edge_lower_limit,
+                                                 short_edge_upper_limit, cover_range, build_magnification),
                                      std::ios::app | std::ios::out);
 
     test_result << UTC_time->tm_year + 1900 << "年" << UTC_time->tm_mon + 1 << "月" << UTC_time->tm_mday << "日"
@@ -38,10 +38,11 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
     test_result << std::format("short edge lower limit: {0:<4}", short_edge_lower_limit) << std::endl;
     test_result << std::format("short edge upper limit: {0:<4}", short_edge_upper_limit) << std::endl;
     test_result << std::format("cover range: {0:<4}", cover_range) << std::endl;
-    test_result << std::format("top k: {0:<4}", k) << std::endl;
     test_result << std::format("build magnification: {0:<4}", build_magnification) << std::endl;
+    test_result << std::format("top k: {0:<4}", k) << std::endl;
 
-    auto search_magnifications = std::vector<uint64_t>{10, 30, 50, 100};
+    auto search_magnifications = std::vector<uint64_t>{30, 50, 100, 200};
+
     test_result << "search magnifications: [" << search_magnifications[0];
 
     for (auto i = 1; i < search_magnifications.size(); ++i)
@@ -54,12 +55,64 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
     HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
                      cover_range, build_magnification);
 
+    uint64_t build_time = 0;
+
     for (auto i = 0; i < train.size(); ++i)
     {
+        auto begin = std::chrono::high_resolution_clock::now();
+
         HSG::Add(index, i, train[i].data());
+
+        auto end = std::chrono::high_resolution_clock::now();
+
+        build_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+
+        if ((i + 1) % 1000000 == 0)
+        {
+            auto operands = 1000000;
+
+            if (i + 1 == 1000000)
+            {
+                operands = 100000;
+            }
+
+            auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
+
+            test_result << std::format("{0:<31}{1:>7} us", s, build_time / operands) << std::endl;
+            build_time = 0;
+        }
+        else if ((i + 1) % 100000 == 0)
+        {
+            auto operands = 100000;
+
+            if (i + 1 == 1000000)
+            {
+                operands = 10000;
+            }
+
+            auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
+
+            test_result << std::format("{0:<31}{1:>7} us", s, build_time / operands) << std::endl;
+            build_time = 0;
+        }
+        else if ((i + 1) % 10000 == 0)
+        {
+            auto operands = 10000;
+            auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
+
+            if (i + 1 == 10000)
+            {
+                operands = 0;
+                s = "add " + std::to_string(0) + " to " + std::to_string(i + 1) + " costs: ";
+            }
+
+            test_result << std::format("{0:<31}{1:>7} us", s, build_time / 10000) << std::endl;
+            build_time = 0;
+        }
     }
 
     auto cover_rate = HSG::Calculate_Coverage(index);
+
     test_result << std::format("cover rate: {0:<6.4}", cover_rate) << std::endl;
 
     for (auto i = 0; i < search_magnifications.size(); ++i)
@@ -154,8 +207,8 @@ int main(int argc, char **argv)
     auto SELL = std::stringstream(argv[6]);
     auto SEUL = std::stringstream(argv[7]);
     auto CR = std::stringstream(argv[8]);
-    auto k = std::stoull(argv[9]);
-    auto BM = std::stringstream(argv[10]);
+    auto BM = std::stringstream(argv[9]);
+    auto k = std::stoull(argv[10]);
 
     uint64_t temporary = 0;
 

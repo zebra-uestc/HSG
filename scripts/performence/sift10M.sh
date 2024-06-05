@@ -20,8 +20,9 @@ numactl --cpunodebind=1 --localalloc \
     "${LL[*]}" \
     "${UL[*]}" \
     "${CR[*]}" \
-    ${K} \
-    "${BM[*]}"
+    "${BM[*]}" \
+    ${K}
+
 
 for l in ${LL[*]}
 do
@@ -30,7 +31,7 @@ do
     do
         for b in ${BM[*]}
         do
-            cat result/HSG/${data}-${l}-${u}-${c}-${K}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
+            cat result/HSG/${data}-${l}-${u}-${c}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
         done
     done
 done
