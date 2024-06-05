@@ -278,21 +278,34 @@ namespace HSG
             for (auto i = 0; i < number; ++i)
             {
                 auto &neighbor_offset = pool[i];
+                auto &neighbor_vector = index.vectors[neighbor_offset];
                 auto &next_offset = pool[i + 1];
                 auto distance =
                     index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension);
 
                 waiting_vectors.push({distance, neighbor_offset});
-                all.push_back({neighbor_offset, distance});
+
+                if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit ||
+                    distance < neighbor_vector.short_edge_out.rbegin()->first)
+                {
+                    all.push_back({neighbor_offset, distance});
+                }
+
                 Prefetch(index.vectors[next_offset].data);
             }
 
             auto &neighbor_offset = pool.back();
+            auto &neighbor_vector = index.vectors[neighbor_offset];
             auto distance =
                 index.similarity(target_vector, index.vectors[neighbor_offset].data, index.parameters.dimension);
 
             waiting_vectors.push({distance, pool.back()});
-            all.push_back({neighbor_offset, distance});
+
+            if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit ||
+                distance < neighbor_vector.short_edge_out.rbegin()->first)
+            {
+                all.push_back({neighbor_offset, distance});
+            }
 
             pool.clear();
         }
@@ -391,7 +404,7 @@ namespace HSG
             const auto &processing_vector = index.vectors[processing_offset];
 
             // 如果优先队列中的向量的数量小于k
-            if (nearest_neighbors.size() < index.parameters.termination_number)
+            if (nearest_neighbors.size() < index.parameters.magnification)
             {
                 nearest_neighbors.push({processing_distance, processing_offset});
             }
@@ -545,28 +558,39 @@ namespace HSG
 
         if (index.parameters.cover_range < short_path.size())
         {
-            bool added = false;
+            float added_distance = 0;
+            float maximum_cosine = -2;
+            Offset added_offset = 0;
 
             for (int i = long_path.size() - 1; 0 < i; --i)
             {
-                const auto &distance = long_path[i].first;
+                const auto &D = long_path[i].first;
                 const auto &neighbor_offset = long_path[i].second;
                 auto &neighbor_vector = index.vectors[neighbor_offset];
 
                 if (neighbor_vector.zero < vector.zero && !Adjacent(vector, neighbor_vector))
                 {
-                    if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
+                    auto CV = Cosine_Value(added_distance, vector.zero, neighbor_vector.zero);
+
+                    if (maximum_cosine < CV)
                     {
-                        neighbor_vector.long_edge_out.insert({offset, distance});
-                        vector.long_edge_in.insert({neighbor_offset, distance});
-                        added = true;
+                        added_distance = D;
+                        maximum_cosine = CV;
+                        added_offset = neighbor_offset;
                     }
                 }
             }
 
-            if (!added)
+            if (1.732 < maximum_cosine)
             {
-                index.vectors.front().long_edge_out.insert({offset, vector.zero});
+                auto &neighbor_vector = index.vectors[added_offset];
+
+                neighbor_vector.long_edge_out.insert({offset, added_distance});
+                vector.long_edge_in.insert({added_offset, added_distance});
+            }
+            else
+            {
+                index.vectors.front().long_edge_out.insert({added_offset, vector.zero});
                 vector.long_edge_in.insert({0, vector.zero});
             }
         }

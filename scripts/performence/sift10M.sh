@@ -2,13 +2,13 @@
 
 cmake --build build --config Release --target performence
 
-data=sift1B
+data=sift10M
 
 LL=(8 16 32)
 UL=(16 32 64)
 CR=(4 5 6 7)
 K=100
-BM=(30 50 100 200 400 800)
+BM=(400 800)
 
 numactl --cpunodebind=1 --localalloc \
     ./binary/release/performence \
