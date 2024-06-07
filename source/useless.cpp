@@ -97,3 +97,22 @@ inline void Visit_KC(const Index &index, const Vector &processing_vector, const 
         }
     }
 }
+
+// Long Edge Reachacble
+//
+// 通过长边可达
+inline bool LE_Reachable(const Index &index, const Offset offset)
+{
+    auto &vector = index.vectors[offset];
+
+    if (offset == 0)
+    {
+        return true;
+    }
+    else if (vector.long_edge_in.empty())
+    {
+        return false;
+    }
+
+    return true;
+}

@@ -17,10 +17,10 @@ namespace HSG
     // 向量内部的唯一标识符
     // 顶点偏移量
     // index.vectors[offset]
-    typedef uint64_t Offset;
+    using Offset = uint64_t;
 
     // 向量外部的唯一标识符
-    typedef uint64_t ID;
+    using ID = uint64_t;
 
     // 向量
     class Vector
@@ -122,35 +122,23 @@ namespace HSG
         return index.id_to_offset.find(id)->second;
     }
 
-    // Long Edge Reachacble
-    //
-    // 通过长边可达
-    inline bool LE_Reachable(const Vector &vector)
+    inline void Delete_Vector(Index &index, const Offset offset)
     {
-        if (vector.offset == 0)
-        {
-            return true;
-        }
-        else if (vector.long_edge_in.empty())
-        {
-            return false;
-        }
+        auto &vector = index.vectors[offset];
 
-        return true;
-    }
-
-    inline void Delete_Vector(Vector &vector)
-    {
         vector.data = nullptr;
+        vector.short_edge_in.clear();
+        vector.short_edge_out.clear();
         vector.keep_connected.clear();
         vector.long_edge_in.clear();
         vector.long_edge_out.clear();
-        vector.short_edge_in.clear();
-        vector.short_edge_out.clear();
     }
 
-    inline bool Adjacent(const Vector &v1, const Vector &v2)
+    inline bool Adjacent(const Index &index, const Offset offset1, const Offset offset2)
     {
+        auto &v1 = index.vectors[offset1];
+        auto &v2 = index.vectors[offset2];
+
         if (v1.keep_connected.contains(v2.offset))
         {
             return true;
@@ -169,9 +157,11 @@ namespace HSG
         return false;
     }
 
-    inline void Get_Pool_From_LEO(const Vector &processing_vector, std::vector<bool> &visited,
+    inline void Get_Pool_From_LEO(const Index &index, const Offset processing_offset, std::vector<bool> &visited,
                                   std::vector<Offset> &pool)
     {
+        auto &processing_vector = index.vectors[processing_offset];
+
         for (auto iterator = processing_vector.long_edge_out.begin(); iterator != processing_vector.long_edge_out.end();
              ++iterator)
         {
@@ -186,8 +176,11 @@ namespace HSG
         }
     }
 
-    inline void Get_Pool_From_SE(const Vector &processing_vector, std::vector<bool> &visited, std::vector<Offset> &pool)
+    inline void Get_Pool_From_SE(const Index &index, const Offset processing_offset, std::vector<bool> &visited,
+                                 std::vector<Offset> &pool)
     {
+        auto &processing_vector = index.vectors[processing_offset];
+
         for (auto iterator = processing_vector.short_edge_out.begin();
              iterator != processing_vector.short_edge_out.end(); ++iterator)
         {
@@ -339,12 +332,12 @@ namespace HSG
         // 计算池子
         auto pool = std::vector<Offset>();
 
-        Get_Pool_From_SE(index.vectors[0], visited, pool);
+        Get_Pool_From_SE(index, 0, visited, pool);
         Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
         auto &short_offset = waiting_vectors.top().second;
 
-        Get_Pool_From_LEO(index.vectors[0], visited, pool);
+        Get_Pool_From_LEO(index, 0, visited, pool);
         Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
         auto &nearest_offset = waiting_vectors.top().second;
@@ -355,15 +348,14 @@ namespace HSG
             {
                 long_path.push_back(waiting_vectors.top());
 
-                const auto &processing_vector_offset = waiting_vectors.top().second;
-                const auto &processing_vector = index.vectors[processing_vector_offset];
+                const auto &processing_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_SE(processing_vector, visited, pool);
+                Get_Pool_From_SE(index, processing_offset, visited, pool);
                 Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
                 const auto &short_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_LEO(processing_vector, visited, pool);
+                Get_Pool_From_LEO(index, processing_offset, visited, pool);
                 Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
                 const auto &nearest_offset = waiting_vectors.top().second;
@@ -380,9 +372,8 @@ namespace HSG
         while (true)
         {
             const auto &processing_offset = waiting_vectors.top().second;
-            const auto &processing_vector = index.vectors[processing_offset];
 
-            Get_Pool_From_SE(processing_vector, visited, pool);
+            Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
 
             const auto &nearest_offset = waiting_vectors.top().second;
@@ -401,7 +392,6 @@ namespace HSG
         {
             const auto &processing_distance = waiting_vectors.top().first;
             const auto &processing_offset = waiting_vectors.top().second;
-            const auto &processing_vector = index.vectors[processing_offset];
 
             // 如果优先队列中的向量的数量小于k
             if (nearest_neighbors.size() < index.parameters.magnification)
@@ -423,27 +413,13 @@ namespace HSG
             }
 
             waiting_vectors.pop();
-            Get_Pool_From_SE(processing_vector, visited, pool);
+            Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity_Add(index, new_vector.data, pool, waiting_vectors, all);
         }
 
         while (index.parameters.short_edge_lower_limit < nearest_neighbors.size())
         {
             nearest_neighbors.pop();
-        }
-
-        const auto &farest_neighbor_distance = nearest_neighbors.top().first;
-
-        // 去重
-        // long_path 和 short_path 中可能有 nearest_neighbors 中的顶点，将它们删除
-        while (!short_path.empty() && short_path.back().first <= farest_neighbor_distance)
-        {
-            short_path.pop_back();
-        }
-
-        while (!long_path.empty() && long_path.back().first <= farest_neighbor_distance)
-        {
-            long_path.pop_back();
         }
     }
 
@@ -568,7 +544,7 @@ namespace HSG
                 const auto &neighbor_offset = long_path[i].second;
                 auto &neighbor_vector = index.vectors[neighbor_offset];
 
-                if (neighbor_vector.zero < vector.zero && !Adjacent(vector, neighbor_vector))
+                if (neighbor_vector.zero < vector.zero && !Adjacent(index, offset, neighbor_offset))
                 {
                     auto CV = Cosine_Value(added_distance, vector.zero, neighbor_vector.zero);
 
@@ -708,149 +684,23 @@ namespace HSG
         Add_Long_Edges(index, long_path, short_path, offset);
     }
 
-    // 基于权重的长边修补方法
-    inline void Repair_LE_Weight(Index &index, Vector &removed_vector)
+    inline void Transfer_LEO(Index &index, const Offset whose_offset, const Offset to_offset)
     {
-        // 计算分母
-        float sum = 0;
+        auto &whose_V = index.vectors[whose_offset];
+        auto &to_V = index.vectors[to_offset];
 
-        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
-             ++iterator)
+        for (auto i = whose_V.long_edge_out.begin(); i != whose_V.long_edge_out.end(); ++i)
         {
-            auto &distance = iterator->second;
-            sum += distance;
+            auto &neighbor_O = i->first;
+            auto &neighbor_V = index.vectors[neighbor_O];
+            auto distance = index.similarity(to_V.data, neighbor_V.data, index.parameters.dimension);
+
+            neighbor_V.long_edge_in.erase(whose_offset);
+            to_V.long_edge_out.insert({neighbor_O, distance});
+            neighbor_V.long_edge_in.insert({to_offset, distance});
         }
 
-        // 删除入边并补边
-        // 真随机数生成器
-        std::random_device random_device_generator;
-
-        // 伪随机数生成器
-        // 用真随机数生成器初始化
-        std::mt19937 mt19937_generator(random_device_generator());
-
-        // 均匀分布
-        std::uniform_real_distribution<float> distribution(0, sum);
-
-        for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
-             ++iterator)
-        {
-            auto &repaired_vector_offset = iterator->first;
-            auto &in_edge_distance = iterator->second;
-            auto &repaired_vector = index.vectors[repaired_vector_offset];
-
-            // 补边
-            for (auto iterator = removed_vector.long_edge_out.begin(); iterator != removed_vector.long_edge_out.end();
-                 ++iterator)
-            {
-                auto &new_long_edge_offset = iterator->first;
-
-                if (distribution(mt19937_generator) < in_edge_distance)
-                {
-                    auto &new_long_edge = index.vectors[new_long_edge_offset];
-                    auto distance =
-                        index.similarity(repaired_vector.data, new_long_edge.data, index.parameters.dimension);
-                    repaired_vector.long_edge_out.insert({new_long_edge_offset, distance});
-                    new_long_edge.long_edge_in.insert({repaired_vector_offset, distance});
-                }
-            }
-        }
-    }
-
-    inline void Transfer_LEI(Index &index, Vector &from, Vector &to)
-    {
-        for (auto iterator = from.long_edge_in.begin(); iterator != from.long_edge_in.end(); ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
-
-            neighbor_vector.long_edge_out.erase(from.offset);
-
-            if (!Adjacent(neighbor_vector, to))
-            {
-                auto distance = index.similarity(neighbor_vector.data, to.data, index.parameters.dimension);
-
-                neighbor_vector.long_edge_out.insert({to.offset, distance});
-                to.long_edge_in.insert({neighbor_offset, distance});
-            }
-        }
-    }
-
-    inline void Transfer_LEO(Index &index, Vector &from, Vector &to)
-    {
-        for (auto iterator = from.long_edge_out.begin(); iterator != from.long_edge_out.end(); ++iterator)
-        {
-            auto &neighbor_offset = iterator->first;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
-            auto distance = index.similarity(neighbor_vector.data, to.data, index.parameters.dimension);
-
-            neighbor_vector.long_edge_in.erase(from.offset);
-
-            if (!Adjacent(neighbor_vector, to))
-            {
-                to.long_edge_out.insert({neighbor_offset, distance});
-                neighbor_vector.long_edge_in.insert({to.offset, distance});
-            }
-        }
-    }
-
-    // TODO 很复杂，要考虑的情况很多
-    inline void Transfer_LE(Index &index, Vector &from, Vector &to)
-    {
-        Transfer_LEI(index, from, to);
-        Transfer_LEO(index, from, to);
-        from.long_edge_in.clear();
-        from.long_edge_out.clear();
-    }
-
-    // 通过转移长边到距离被删除向量最近的向量修补长边
-    inline void Repair_LE_Transfer(Index &index, Vector &removed_vector)
-    {
-        auto &RV = removed_vector;
-        auto &substitute_offset = removed_vector.short_edge_out.begin()->second;
-        auto &substitute_vector = index.vectors[substitute_offset];
-
-        for (auto iterator = RV.long_edge_out.begin(); iterator != RV.long_edge_out.end(); ++iterator)
-        {
-            auto &repaired_offset = iterator->first;
-            auto &repaired_vector = index.vectors[repaired_offset];
-
-            if (Adjacent(repaired_vector, substitute_vector))
-            {
-                Transfer_LE(index, repaired_vector, substitute_vector);
-            }
-            else
-            {
-                if (!repaired_vector.long_edge_out.contains(substitute_offset))
-                {
-                    auto distance =
-                        index.similarity(substitute_vector.data, repaired_vector.data, index.parameters.dimension);
-                    substitute_vector.long_edge_out.insert({repaired_offset, distance});
-                    repaired_vector.long_edge_in.insert({substitute_offset, distance});
-                }
-            }
-        }
-
-        for (auto iterator = RV.long_edge_in.begin(); iterator != RV.long_edge_in.end(); ++iterator)
-        {
-            auto &repaired_offset = iterator->first;
-            auto &repaired_vector = index.vectors[repaired_offset];
-
-            if (Adjacent(repaired_vector, substitute_vector))
-            {
-                Transfer_LE(index, repaired_vector, substitute_vector);
-            }
-            else
-            {
-                if (!substitute_vector.long_edge_out.contains(repaired_offset))
-                {
-                    auto distance =
-                        index.similarity(substitute_vector.data, repaired_vector.data, index.parameters.dimension);
-                    repaired_vector.long_edge_out.insert({substitute_offset, distance});
-                    substitute_vector.long_edge_in.insert({repaired_offset, distance});
-                }
-            }
-        }
+        whose_V.long_edge_out.clear();
     }
 
     inline void Mark_Erase(const Vector &repaired_vector, std::vector<bool> &visited)
@@ -859,6 +709,7 @@ namespace HSG
              ++iterator)
         {
             auto &neighbor_offset = iterator->first;
+
             visited[neighbor_offset] = true;
         }
 
@@ -866,6 +717,7 @@ namespace HSG
              ++iterator)
         {
             auto &neighbor_offset = iterator->second;
+
             visited[neighbor_offset] = true;
         }
 
@@ -873,6 +725,7 @@ namespace HSG
              ++iterator)
         {
             auto &neighbor_offset = *iterator;
+
             visited[neighbor_offset] = true;
         }
     }
@@ -892,9 +745,8 @@ namespace HSG
                  ++iterator)
             {
                 auto &NNO = iterator->first;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -902,9 +754,8 @@ namespace HSG
                  iterator != neighbor_vector.short_edge_out.end(); ++iterator)
             {
                 auto &NNO = iterator->second;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -912,9 +763,8 @@ namespace HSG
                  iterator != neighbor_vector.keep_connected.end(); ++iterator)
             {
                 auto &NNO = *iterator;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
         }
@@ -929,9 +779,8 @@ namespace HSG
                  ++iterator)
             {
                 auto &NNO = iterator->first;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -939,9 +788,8 @@ namespace HSG
                  iterator != neighbor_vector.short_edge_out.end(); ++iterator)
             {
                 auto &NNO = iterator->second;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -949,9 +797,8 @@ namespace HSG
                  iterator != neighbor_vector.keep_connected.end(); ++iterator)
             {
                 auto &NNO = *iterator;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
         }
@@ -966,9 +813,8 @@ namespace HSG
                  ++iterator)
             {
                 auto &NNO = iterator->first;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -976,9 +822,8 @@ namespace HSG
                  iterator != neighbor_vector.short_edge_out.end(); ++iterator)
             {
                 auto &NNO = iterator->second;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
 
@@ -986,27 +831,28 @@ namespace HSG
                  iterator != neighbor_vector.keep_connected.end(); ++iterator)
             {
                 auto &NNO = *iterator;
-                auto &NNV = index.vectors[NNO];
 
-                Get_Pool_From_SE(NNV, visited, pool);
+                Get_Pool_From_SE(index, NNO, visited, pool);
                 Similarity(index, repaired_vector.data, pool, waiting_vectors);
             }
         }
     }
 
     // 删除索引中的向量
-    inline void Erase(Index &index, const ID removed_vector_id)
+    inline void Erase(Index &index, const ID removed_id)
     {
-        auto removed_vector_offset = Get_Offset(index, removed_vector_id);
-        index.id_to_offset.erase(removed_vector_id);
-        auto &removed_vector = index.vectors[removed_vector_offset];
+        auto removed_offset = Get_Offset(index, removed_id);
+        index.id_to_offset.erase(removed_id);
+        auto &removed_vector = index.vectors[removed_offset];
 
         // 删除短边的出边
         for (auto iterator = removed_vector.short_edge_out.begin(); iterator != removed_vector.short_edge_out.end();
              ++iterator)
         {
             auto &neighbor_offset = iterator->second;
-            index.vectors[neighbor_offset].short_edge_in.erase(removed_vector_offset);
+            auto &neighbor_vector = index.vectors[neighbor_offset];
+
+            neighbor_vector.short_edge_in.erase(removed_offset);
         }
 
         // 删除短边的入边
@@ -1018,7 +864,7 @@ namespace HSG
             auto &vector = index.vectors[neighbor_offset];
             auto temporary_iterator = vector.short_edge_out.find(distance);
 
-            while (temporary_iterator->second != removed_vector_offset)
+            while (temporary_iterator->second != removed_offset)
             {
                 ++temporary_iterator;
             }
@@ -1032,7 +878,7 @@ namespace HSG
             auto &neighbor_offset = *iterator;
             auto &vector = index.vectors[neighbor_offset];
 
-            vector.keep_connected.erase(removed_vector_offset);
+            vector.keep_connected.erase(removed_offset);
         }
 
         // 删除长边
@@ -1042,7 +888,7 @@ namespace HSG
             auto &neighbor_offset = iterator->first;
             auto &neighbor_vector = index.vectors[neighbor_offset];
 
-            neighbor_vector.long_edge_in.erase(removed_vector_offset);
+            neighbor_vector.long_edge_in.erase(removed_offset);
         }
 
         for (auto iterator = removed_vector.long_edge_in.begin(); iterator != removed_vector.long_edge_in.end();
@@ -1051,7 +897,7 @@ namespace HSG
             auto &neighbor_offset = iterator->first;
             auto &neighbor_vector = index.vectors[neighbor_offset];
 
-            neighbor_vector.long_edge_out.erase(removed_vector_offset);
+            neighbor_vector.long_edge_out.erase(removed_offset);
         }
 
         // 补边
@@ -1064,15 +910,12 @@ namespace HSG
             if (repaired_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit)
             {
                 auto visited = std::vector<bool>(index.vectors.size(), false);
+
                 visited[repaired_offset] = true;
 
-                // 优先队列
                 auto nearest_neighbors = std::priority_queue<std::pair<float, Offset>>();
-
-                // 排队队列
                 auto waiting_vectors = std::priority_queue<std::pair<float, Offset>,
                                                            std::vector<std::pair<float, Offset>>, std::greater<>>();
-
                 auto pool = std::vector<Offset>();
 
                 Mark_Erase(repaired_vector, visited);
@@ -1081,15 +924,14 @@ namespace HSG
                 while (!waiting_vectors.empty())
                 {
                     auto processing_distance = waiting_vectors.top().first;
-                    auto processing_vector_offset = waiting_vectors.top().second;
-                    auto &processing_vector = index.vectors[processing_vector_offset];
+                    auto processing_offset = waiting_vectors.top().second;
+
                     waiting_vectors.pop();
 
                     // 如果已遍历的向量小于候选数量
-                    if (nearest_neighbors.size() <
-                        index.parameters.short_edge_lower_limit + index.parameters.magnification)
+                    if (nearest_neighbors.size() < index.parameters.magnification)
                     {
-                        nearest_neighbors.push({processing_distance, processing_vector_offset});
+                        nearest_neighbors.push({processing_distance, processing_offset});
                     }
                     else
                     {
@@ -1097,7 +939,7 @@ namespace HSG
                         if (processing_distance < nearest_neighbors.top().first)
                         {
                             nearest_neighbors.pop();
-                            nearest_neighbors.push({processing_distance, processing_vector_offset});
+                            nearest_neighbors.push({processing_distance, processing_offset});
                         }
                         else
                         {
@@ -1105,7 +947,7 @@ namespace HSG
                         }
                     }
 
-                    Get_Pool_From_SE(processing_vector, visited, pool);
+                    Get_Pool_From_SE(index, processing_offset, visited, pool);
                     Similarity(index, repaired_vector.data, pool, waiting_vectors);
                 }
 
@@ -1119,30 +961,29 @@ namespace HSG
                 auto &TV = index.vectors[TO];
 
                 repaired_vector.short_edge_out.insert(nearest_neighbors.top());
-                index.vectors[TO].short_edge_in.insert({repaired_offset, TD});
+                TV.short_edge_in.insert({repaired_offset, TD});
 
                 if (repaired_vector.long_edge_out.contains(TO))
                 {
                     repaired_vector.long_edge_out.erase(TO);
                     TV.long_edge_in.erase(repaired_offset);
-                    Transfer_LE(index, TV, repaired_vector);
+                    Transfer_LEO(index, TO, repaired_offset);
                 }
-
-                if (TV.long_edge_out.contains(repaired_offset))
+                else if (TV.long_edge_out.contains(repaired_offset))
                 {
                     TV.long_edge_out.erase(repaired_offset);
                     repaired_vector.long_edge_in.erase(TO);
-                    Transfer_LE(index, repaired_vector, TV);
+                    Transfer_LEO(index, repaired_offset, TO);
                 }
             }
         }
 
-        // 如果长边不多
-        // Repair_LE_Weight(index, removed_vector);
-        // 否则
-        Repair_LE_Transfer(index, removed_vector);
+        if (!removed_vector.long_edge_out.empty())
+        {
+            Transfer_LEO(index, removed_offset, removed_vector.long_edge_in.begin()->first);
+        }
 
-        Delete_Vector(removed_vector);
+        Delete_Vector(index, removed_offset);
     }
 
     // 查询距离目标向量最近的top-k个向量
@@ -1163,12 +1004,12 @@ namespace HSG
         // 计算池子
         auto pool = std::vector<Offset>();
 
-        Get_Pool_From_SE(index.vectors[0], visited, pool);
+        Get_Pool_From_SE(index, 0, visited, pool);
         Similarity(index, target_vector, pool, waiting_vectors);
 
         auto &short_offset = waiting_vectors.top().second;
 
-        Get_Pool_From_LEO(index.vectors[0], visited, pool);
+        Get_Pool_From_LEO(index, 0, visited, pool);
         Similarity(index, target_vector, pool, waiting_vectors);
 
         auto &nearest_offset = waiting_vectors.top().second;
@@ -1177,15 +1018,14 @@ namespace HSG
         {
             while (true)
             {
-                auto processing_vector_offset = waiting_vectors.top().second;
-                auto &processing_vector = index.vectors[processing_vector_offset];
+                auto processing_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_SE(processing_vector, visited, pool);
+                Get_Pool_From_SE(index, processing_offset, visited, pool);
                 Similarity(index, target_vector, pool, waiting_vectors);
 
                 auto &short_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_LEO(processing_vector, visited, pool);
+                Get_Pool_From_LEO(index, processing_offset, visited, pool);
                 Similarity(index, target_vector, pool, waiting_vectors);
 
                 auto &nearest_offset = waiting_vectors.top().second;
@@ -1202,8 +1042,8 @@ namespace HSG
         while (!waiting_vectors.empty())
         {
             auto processing_distance = waiting_vectors.top().first;
-            auto processing_vector_offset = waiting_vectors.top().second;
-            auto &processing_vector = index.vectors[processing_vector_offset];
+            auto processing_offset = waiting_vectors.top().second;
+            auto &processing_vector = index.vectors[processing_offset];
             waiting_vectors.pop();
 
             // 如果已遍历的向量小于候选数量
@@ -1225,7 +1065,7 @@ namespace HSG
                 }
             }
 
-            Get_Pool_From_SE(processing_vector, visited, pool);
+            Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity(index, target_vector, pool, waiting_vectors);
         }
 
@@ -1600,12 +1440,12 @@ namespace HSG
         // 计算池子
         auto pool = std::vector<Offset>();
 
-        Get_Pool_From_SE(index.vectors[0], visited, pool);
+        Get_Pool_From_SE(index, 0, visited, pool);
         Similarity(index, vector.data, pool, waiting_vectors);
 
         auto &short_offset = waiting_vectors.top().second;
 
-        Get_Pool_From_LEO(index.vectors[0], visited, pool);
+        Get_Pool_From_LEO(index, 0, visited, pool);
         Similarity(index, vector.data, pool, waiting_vectors);
 
         auto &nearest_offset = waiting_vectors.top().second;
@@ -1616,15 +1456,14 @@ namespace HSG
             {
                 long_path.push_back(waiting_vectors.top());
 
-                const auto &processing_vector_offset = waiting_vectors.top().second;
-                const auto &processing_vector = index.vectors[processing_vector_offset];
+                const auto &processing_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_SE(processing_vector, visited, pool);
+                Get_Pool_From_SE(index, processing_offset, visited, pool);
                 Similarity(index, vector.data, pool, waiting_vectors);
 
                 const auto &short_offset = waiting_vectors.top().second;
 
-                Get_Pool_From_LEO(processing_vector, visited, pool);
+                Get_Pool_From_LEO(index, processing_offset, visited, pool);
                 Similarity(index, vector.data, pool, waiting_vectors);
 
                 const auto &nearest_offset = waiting_vectors.top().second;
@@ -1635,44 +1474,39 @@ namespace HSG
                 }
             }
         }
-
-        auto farest_distance = vector.short_edge_out.rbegin()->first;
-
-        // 去重
-        while (!long_path.empty() && long_path.back().first <= farest_distance)
-        {
-            long_path.pop_back();
-        }
     }
 
     inline void Add_Long_Edges_Optimize(Index &index, std::vector<std::pair<float, Offset>> &long_path,
                                         const Offset offset)
     {
         auto &vector = index.vectors[offset];
-        bool added = false;
+        float added_distance = 0;
+        float maximum_cosine = -2;
+        Offset added_offset = 0;
 
         for (int i = long_path.size() - 1; 0 < i; --i)
         {
-            const auto &distance = long_path[i].first;
+            const auto &D = long_path[i].first;
             const auto &neighbor_offset = long_path[i].second;
             auto &neighbor_vector = index.vectors[neighbor_offset];
 
-            if (neighbor_vector.zero < vector.zero && !Adjacent(vector, neighbor_vector))
+            if (neighbor_vector.zero < vector.zero && !Adjacent(index, offset, neighbor_offset))
             {
-                if (1.732 < Cosine_Value(distance, vector.zero, neighbor_vector.zero))
+                auto CV = Cosine_Value(added_distance, vector.zero, neighbor_vector.zero);
+
+                if (maximum_cosine < CV)
                 {
-                    neighbor_vector.long_edge_out.insert({offset, distance});
-                    vector.long_edge_in.insert({neighbor_offset, distance});
-                    added = true;
+                    added_distance = D;
+                    maximum_cosine = CV;
+                    added_offset = neighbor_offset;
                 }
             }
         }
 
-        if (!added)
-        {
-            index.vectors.front().long_edge_out.insert({offset, vector.zero});
-            vector.long_edge_in.insert({0, vector.zero});
-        }
+        auto &neighbor_vector = index.vectors[added_offset];
+
+        neighbor_vector.long_edge_out.insert({offset, added_distance});
+        vector.long_edge_in.insert({added_offset, added_distance});
     }
 
     // 优化索引结构
