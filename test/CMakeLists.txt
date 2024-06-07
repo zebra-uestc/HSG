@@ -16,7 +16,8 @@ target_include_directories(hnsw PRIVATE .)
 add_executable(WRA EXCLUDE_FROM_ALL write_reference_answer.cpp)
 target_include_directories(WRA PRIVATE .)
 
-add_executable(DB EXCLUDE_FROM_ALL delete_both.cpp)
+add_executable(DB EXCLUDE_FROM_ALL delete_both.cpp
+        NSG.cpp)
 target_include_directories(DB PRIVATE .)
 target_include_directories(DB PRIVATE ../source)
 
