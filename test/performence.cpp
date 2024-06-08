@@ -67,45 +67,32 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
 
         build_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
-        if ((i + 1) % 1000000 == 0)
+        if (1000000 <= i && i < 10000000 && (i + 1) % 1000000 == 0)
         {
             auto operands = 1000000;
-
-            if (i + 1 == 1000000)
-            {
-                operands = 100000;
-            }
-
             auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
 
             test_result << std::format("{0:<31}{1:>7} us", s, build_time / operands) << std::endl;
             build_time = 0;
         }
-        else if ((i + 1) % 100000 == 0)
+        else if (100000 <= i && i < 1000000 && (i + 1) % 100000 == 0)
         {
             auto operands = 100000;
-
-            if (i + 1 == 1000000)
-            {
-                operands = 10000;
-            }
-
             auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
 
             test_result << std::format("{0:<31}{1:>7} us", s, build_time / operands) << std::endl;
             build_time = 0;
         }
-        else if ((i + 1) % 10000 == 0)
+        else if (10000 <= i && i < 100000 && (i + 1) % 10000 == 0)
         {
             auto operands = 10000;
             auto s = "add " + std::to_string(i + 1 - operands) + " to " + std::to_string(i + 1) + " costs: ";
-
-            if (i + 1 == 10000)
-            {
-                operands = 0;
-                s = "add " + std::to_string(0) + " to " + std::to_string(i + 1) + " costs: ";
-            }
-
+            test_result << std::format("{0:<31}{1:>7} us", s, build_time / operands) << std::endl;
+            build_time = 0;
+        }
+        else if (i == 9999)
+        {
+            auto s = "add " + std::to_string(0) + " to " + std::to_string(10000) + " costs: ";
             test_result << std::format("{0:<31}{1:>7} us", s, build_time / 10000) << std::endl;
             build_time = 0;
         }

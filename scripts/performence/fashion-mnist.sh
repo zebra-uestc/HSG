@@ -10,8 +10,7 @@ CR=(4 5 6)
 K=100
 BM=(30 50 100 200 400 800)
 
-# numactl --physcpubind=12,14,16,18,20,22,36,38,40,42,44,46 --localalloc \
-numactl --cpunodebind=0 --localalloc \
+numactl --physcpubind=36-47 --localalloc \
     ./binary/release/performence \
     ./data/${data}/train \
     ./data/${data}/test \
