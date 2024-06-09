@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cmake --build build --config Release --target DR
-# cmake --build build --config Debug --target DR
+cmake --build build/ --config Release --target DR
+# cmake --build build/gcc --config Debug --target DR
 
 data=sift10M
 numactl --cpunodebind=0 --localalloc \

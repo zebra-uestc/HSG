@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cmake --build build --config Release --target hnsw
+cmake --build build/clang --config Release --target hnsw
 
 # data=fashion-mnist
 # numactl --cpunodebind=1 --localalloc \

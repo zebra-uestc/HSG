@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cmake --build build --config Release --target DB
-# cmake --build build --config Debug --target DB
+cmake --build build/clang --config Release --target DB
+# cmake --build build/gcc --config Debug --target DB
 
 data=sift10M
 numactl --cpunodebind=0 --localalloc \

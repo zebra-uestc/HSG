@@ -1,3 +1,6 @@
+cmake --build build/clang --config Release --target WRA
+# cmake --build build/gcc --config Debug --target WRA
+
 data=fashion-mnist
 ./binary/release/WRA \
     ./data/${data}/train \

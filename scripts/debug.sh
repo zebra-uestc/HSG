@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cmake --build build --config Release
-# cmake --build build --config Debug
+cmake --build build/clang --config Release
+# cmake --build build/gcc --config Debug
 
 data=fashion-mnist
 numactl --cpunodebind=0 --localalloc \

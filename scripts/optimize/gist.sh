@@ -1,7 +1,7 @@
 #!/bin/bash
 
-cmake --build build --config Release --target optimize
-# cmake --build build --config Debug --target optimize
+cmake --build build/clang --config Release --target optimize
+# cmake --build build/gcc --config Debug --target optimize
 
 data=gist
 nohup \

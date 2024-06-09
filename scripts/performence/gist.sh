@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cmake --build build --config Release --target performence
+cmake --build build/clang --config Release --target performence
 
 data=gist
 
