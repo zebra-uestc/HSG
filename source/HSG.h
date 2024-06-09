@@ -291,7 +291,7 @@ namespace HSG
         return true;
     }
 
-    inline bool Similarity_Add(const Index &index, const float *const target_vector, std::vector<Offset> &pool,
+    inline void Similarity_Add(const Index &index, const float *const target_vector, std::vector<Offset> &pool,
                                std::priority_queue<std::pair<float, ID>> &nearest_neighbors,
                                std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
                                                    std::greater<>> &waiting_vectors,
@@ -299,13 +299,6 @@ namespace HSG
     {
         if (!pool.empty())
         {
-            auto farest_offset = std::numeric_limits<uint64_t>::max();
-
-            if (nearest_neighbors.size() == index.parameters.magnification)
-            {
-                farest_offset = nearest_neighbors.top().second;
-            }
-
             const auto number = pool.size() - 1;
 
             Prefetch(index.vectors[pool.front()].data);
@@ -321,14 +314,14 @@ namespace HSG
                 if (nearest_neighbors.size() < index.parameters.magnification)
                 {
                     nearest_neighbors.push({distance, neighbor_offset});
+                    waiting_vectors.push({distance, neighbor_offset});
                 }
                 else if (distance < nearest_neighbors.top().first)
                 {
                     nearest_neighbors.pop();
                     nearest_neighbors.push({distance, neighbor_offset});
+                    waiting_vectors.push({distance, neighbor_offset});
                 }
-
-                waiting_vectors.push({distance, neighbor_offset});
 
                 if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit ||
                     distance < neighbor_vector.short_edge_out.rbegin()->first)
@@ -346,14 +339,14 @@ namespace HSG
             if (nearest_neighbors.size() < index.parameters.magnification)
             {
                 nearest_neighbors.push({distance, neighbor_offset});
+                waiting_vectors.push({distance, neighbor_offset});
             }
             else if (distance < nearest_neighbors.top().first)
             {
                 nearest_neighbors.pop();
                 nearest_neighbors.push({distance, neighbor_offset});
+                waiting_vectors.push({distance, neighbor_offset});
             }
-
-            waiting_vectors.push({distance, neighbor_offset});
 
             if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit ||
                 distance < neighbor_vector.short_edge_out.rbegin()->first)
@@ -362,17 +355,7 @@ namespace HSG
             }
 
             pool.clear();
-
-            if (farest_offset == std::numeric_limits<uint64_t>::max() ||
-                farest_offset != nearest_neighbors.top().second)
-            {
-                return false;
-            }
-
-            return true;
         }
-
-        return true;
     }
 
     // 查询距离目标向量最近的k个向量
@@ -392,7 +375,7 @@ namespace HSG
             std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>, std::greater<>>();
 
         waiting_vectors.push({new_vector.zero, 0});
-        long_path.push_back({new_vector.zero, 0});
+        nearest_neighbors.push({new_vector.zero, 0});
 
         const auto &zero_vector = index.vectors.front();
 
@@ -410,8 +393,9 @@ namespace HSG
         // 计算池子
         auto pool = std::vector<Offset>();
 
-        while (true)
+        while (!waiting_vectors.empty())
         {
+            auto processing_distance = waiting_vectors.top().first;
             auto processing_offset = waiting_vectors.top().second;
 
             long_path.push_back(waiting_vectors.top());
@@ -419,14 +403,14 @@ namespace HSG
             Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity_Add(index, new_vector.data, pool, nearest_neighbors, waiting_vectors, all);
 
-            const auto short_offset = waiting_vectors.top().second;
+            const auto short_distance = waiting_vectors.top().first;
 
             Get_Pool_From_LEO(index, processing_offset, visited, pool);
             Similarity_Add(index, new_vector.data, pool, nearest_neighbors, waiting_vectors, all);
 
-            const auto &nearest_offset = waiting_vectors.top().second;
+            const auto &nearest_distance = waiting_vectors.top().first;
 
-            if (short_offset == nearest_offset)
+            if (processing_distance <= nearest_distance || short_distance <= nearest_distance)
             {
                 break;
             }
@@ -434,17 +418,18 @@ namespace HSG
 
         // 阶段二：
         // 利用短边找到和目标向量最近的向量
-        while (true)
+        while (!waiting_vectors.empty())
         {
+            const auto processing_distance = waiting_vectors.top().first;
             const auto processing_offset = waiting_vectors.top().second;
 
             waiting_vectors.pop();
             Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity_Add(index, new_vector.data, pool, nearest_neighbors, waiting_vectors, all);
 
-            const auto &nearest_offset = waiting_vectors.top().second;
+            const auto &nearest_distance = waiting_vectors.top().first;
 
-            if (processing_offset == nearest_offset)
+            if (processing_distance < nearest_distance)
             {
                 break;
             }
@@ -456,20 +441,20 @@ namespace HSG
         // 查找与目标向量相似度最高（距离最近）的k个向量
         while (!waiting_vectors.empty())
         {
-            const auto &processing_offset = waiting_vectors.top().second;
+            const auto &distance = waiting_vectors.top().first;
+            const auto processing_offset = waiting_vectors.top().second;
 
-            waiting_vectors.pop();
-            Get_Pool_From_SE(index, processing_offset, visited, pool);
-
-            auto end = Similarity_Add(index, new_vector.data, pool, nearest_neighbors, waiting_vectors, all);
-
-            if (end)
+            if (nearest_neighbors.top().first < distance)
             {
                 break;
             }
+
+            waiting_vectors.pop();
+            Get_Pool_From_SE(index, processing_offset, visited, pool);
+            Similarity_Add(index, new_vector.data, pool, nearest_neighbors, waiting_vectors, all);
         }
 
-        while (index.parameters.short_edge_lower_limit < nearest_neighbors.size())
+        while (index.parameters.short_edge_lower_limit <= nearest_neighbors.size())
         {
             nearest_neighbors.pop();
         }
@@ -609,7 +594,7 @@ namespace HSG
                 }
             }
 
-            if (1.732 < maximum_cosine)
+            if (added_distance != 0)
             {
                 auto &neighbor_vector = index.vectors[added_offset];
 
@@ -1022,7 +1007,7 @@ namespace HSG
         Delete_Vector(index, removed_offset);
     }
 
-    inline bool Similarity_Search(const Index &index, const float *const target_vector, const uint64_t capacity,
+    inline void Similarity_Search(const Index &index, const float *const target_vector, const uint64_t capacity,
                                   std::vector<Offset> &pool,
                                   std::priority_queue<std::pair<float, ID>> &nearest_neighbors,
                                   std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
@@ -1030,13 +1015,6 @@ namespace HSG
     {
         if (!pool.empty())
         {
-            auto farest_offset = std::numeric_limits<uint64_t>::max();
-
-            if (nearest_neighbors.size() == capacity)
-            {
-                farest_offset = nearest_neighbors.top().second;
-            }
-
             const auto number = pool.size() - 1;
 
             Prefetch(index.vectors[pool.front()].data);
@@ -1050,16 +1028,16 @@ namespace HSG
                 const auto &next_vector = index.vectors[next_offset];
                 const auto distance = index.similarity(target_vector, neighbor_vector.data, index.parameters.dimension);
 
-                waiting_vectors.push({distance, neighbor_offset});
-
                 if (nearest_neighbors.size() < capacity)
                 {
                     nearest_neighbors.push({distance, neighbor_id});
+                    waiting_vectors.push({distance, neighbor_offset});
                 }
                 else if (distance < nearest_neighbors.top().first)
                 {
                     nearest_neighbors.pop();
                     nearest_neighbors.push({distance, neighbor_id});
+                    waiting_vectors.push({distance, neighbor_offset});
                 }
 
                 Prefetch(next_vector.data);
@@ -1070,30 +1048,20 @@ namespace HSG
             const auto &neighbor_id = neighbor_vector.id;
             const auto distance = index.similarity(target_vector, neighbor_vector.data, index.parameters.dimension);
 
-            waiting_vectors.push({distance, neighbor_offset});
-
             if (nearest_neighbors.size() < capacity)
             {
                 nearest_neighbors.push({distance, neighbor_id});
+                waiting_vectors.push({distance, neighbor_offset});
             }
             else if (distance < nearest_neighbors.top().first)
             {
                 nearest_neighbors.pop();
                 nearest_neighbors.push({distance, neighbor_id});
+                waiting_vectors.push({distance, neighbor_offset});
             }
 
             pool.clear();
-
-            if (farest_offset == std::numeric_limits<uint64_t>::max() ||
-                farest_offset != nearest_neighbors.top().second)
-            {
-                return false;
-            }
-
-            return true;
         }
-
-        return true;
     }
 
     // 查询距离目标向量最近的top-k个向量
@@ -1119,22 +1087,23 @@ namespace HSG
         // 计算池子
         auto pool = std::vector<Offset>();
 
-        while (true)
+        while (!waiting_vectors.empty())
         {
+            auto processing_distance = waiting_vectors.top().first;
             auto processing_offset = waiting_vectors.top().second;
 
             waiting_vectors.pop();
             Get_Pool_From_SE(index, processing_offset, visited, pool);
             Similarity_Search(index, target_vector, capacity, pool, nearest_neighbors, waiting_vectors);
 
-            const auto short_offset = waiting_vectors.top().second;
+            const auto short_distance = waiting_vectors.top().first;
 
             Get_Pool_From_LEO(index, processing_offset, visited, pool);
             Similarity_Search(index, target_vector, capacity, pool, nearest_neighbors, waiting_vectors);
 
-            const auto &nearest_offset = waiting_vectors.top().second;
+            const auto &nearest_distance = waiting_vectors.top().first;
 
-            if (nearest_offset == short_offset)
+            if (processing_distance <= nearest_distance || short_distance <= nearest_distance)
             {
                 break;
             }
@@ -1144,17 +1113,17 @@ namespace HSG
         // 查找与目标向量相似度最高（距离最近）的top-k个向量
         while (!waiting_vectors.empty())
         {
-            auto processing_offset = waiting_vectors.top().second;
+            const auto &distance = waiting_vectors.top().first;
+            const auto processing_offset = waiting_vectors.top().second;
 
-            waiting_vectors.pop();
-            Get_Pool_From_SE(index, processing_offset, visited, pool);
-
-            auto end = Similarity_Search(index, target_vector, capacity, pool, nearest_neighbors, waiting_vectors);
-
-            if (end)
+            if (nearest_neighbors.top().first < distance)
             {
                 break;
             }
+
+            waiting_vectors.pop();
+            Get_Pool_From_SE(index, processing_offset, visited, pool);
+            Similarity_Search(index, target_vector, capacity, pool, nearest_neighbors, waiting_vectors);
         }
 
         return nearest_neighbors;

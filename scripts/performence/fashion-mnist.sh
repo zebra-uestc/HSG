@@ -7,8 +7,8 @@ data=fashion-mnist
 LL=(4 8 16)
 UL=(8 16 32)
 CR=(4 5 6)
-K=100
 BM=(30 50 100 200 400 800)
+K=100
 
 numactl --physcpubind=36-47 --localalloc \
     ./binary/release/performence \
