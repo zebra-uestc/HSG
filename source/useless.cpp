@@ -116,3 +116,56 @@ inline bool LE_Reachable(const Index &index, const Offset offset)
 
     return true;
 }
+
+inline void Neighbor_Optimize(Index &index, const Offset offset, std::vector<std::pair<Offset, float>> &all)
+{
+    auto &new_vector = index.vectors[offset];
+
+    for (auto i = 0; i < all.size(); ++i)
+    {
+        const auto &neighbor_offset = all[i].first;
+        const auto &distance = all[i].second;
+        auto &neighbor_vector = index.vectors[neighbor_offset];
+
+        // 如果邻居向量的出边小于短边下限
+        if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_lower_limit)
+        {
+            // 邻居向量添加出边
+            neighbor_vector.short_edge_out.insert({distance, offset});
+
+            // 新向量添加入边
+            new_vector.short_edge_in.insert({neighbor_offset, distance});
+        }
+        // 如果新向量和邻居的距离小于邻居当前距离最大的出边的距离
+        else if (distance < neighbor_vector.short_edge_out.rbegin()->first)
+        {
+            neighbor_vector.short_edge_out.insert({distance, offset});
+            new_vector.short_edge_in.insert({neighbor_offset, distance});
+
+            const auto distance = neighbor_vector.short_edge_out.rbegin()->first;
+            const auto NN_offset = neighbor_vector.short_edge_out.rbegin()->second;
+            auto &NN_vector = index.vectors[NN_offset];
+
+            // 邻居向量删除距离最大的出边
+            neighbor_vector.short_edge_out.erase(std::prev(neighbor_vector.short_edge_out.end()));
+            NN_vector.short_edge_in.erase(neighbor_offset);
+
+            if (!neighbor_vector.short_edge_in.contains(NN_offset))
+            {
+                if (!Connected(index, neighbor_offset, NN_offset))
+                {
+                    if (neighbor_vector.short_edge_out.size() < index.parameters.short_edge_upper_limit)
+                    {
+                        neighbor_vector.short_edge_out.insert({distance, NN_offset});
+                        NN_vector.short_edge_in.insert({neighbor_offset, distance});
+                    }
+                    else
+                    {
+                        neighbor_vector.keep_connected.insert(NN_offset);
+                        NN_vector.keep_connected.insert(neighbor_offset);
+                    }
+                }
+            }
+        }
+    }
+}
