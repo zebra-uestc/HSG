@@ -69,23 +69,22 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
 
     uint64_t irrelevant_number = 0;
     uint64_t relevant_number = 0;
-    auto iterator = relevant.begin();
-    auto deleted_relevant = std::unordered_set<uint64_t>();
+    auto deleted = std::unordered_set<uint64_t>();
 
     // 删去1/3
     {
         while (irrelevant_number < irrelevant.size() / 3)
         {
             HSG::Erase(index, irrelevant[irrelevant_number]);
+            deleted.insert(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < relevant.size() / 3)
         {
-            HSG::Erase(index, *iterator);
-            deleted_relevant.insert(*iterator);
+            HSG::Erase(index, relevant[relevant_number]);
+            deleted.insert(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -97,8 +96,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 
@@ -113,15 +111,15 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (irrelevant_number < (irrelevant.size() / 3) * 2)
         {
             HSG::Erase(index, irrelevant[irrelevant_number]);
+            deleted.insert(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < (relevant.size() / 3) * 2)
         {
-            HSG::Erase(index, *iterator);
-            deleted_relevant.insert(*iterator);
+            HSG::Erase(index, relevant[relevant_number]);
+            deleted.insert(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -133,8 +131,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 
@@ -149,15 +146,15 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (irrelevant_number < irrelevant.size())
         {
             HSG::Erase(index, irrelevant[irrelevant_number]);
+            deleted.insert(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < relevant.size())
         {
-            HSG::Erase(index, *iterator);
-            deleted_relevant.insert(*iterator);
+            HSG::Erase(index, relevant[relevant_number]);
+            deleted.insert(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -169,8 +166,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 
@@ -182,22 +178,21 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
 
     irrelevant_number = 0;
     relevant_number = 0;
-    iterator = relevant.begin();
 
     // 加回1/3
     {
         while (irrelevant_number < irrelevant.size() / 3)
         {
             HSG::Add(index, irrelevant[irrelevant_number], train[irrelevant[irrelevant_number]].data());
+            deleted.erase(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < relevant.size() / 3)
         {
-            HSG::Add(index, *iterator, train[*iterator].data());
-            deleted_relevant.erase(*iterator);
+            HSG::Add(index, relevant[relevant_number], train[relevant[relevant_number]].data());
+            deleted.erase(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -209,8 +204,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 
@@ -225,15 +219,15 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (irrelevant_number < (irrelevant.size() / 3) * 2)
         {
             HSG::Add(index, irrelevant[irrelevant_number], train[irrelevant[irrelevant_number]].data());
+            deleted.erase(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < (relevant.size() / 3) * 2)
         {
-            HSG::Add(index, *iterator, train[*iterator].data());
-            deleted_relevant.erase(*iterator);
+            HSG::Add(index, relevant[relevant_number], train[relevant[relevant_number]].data());
+            deleted.erase(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -245,8 +239,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 
@@ -261,15 +254,15 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (irrelevant_number < irrelevant.size())
         {
             HSG::Add(index, irrelevant[irrelevant_number], train[irrelevant[irrelevant_number]].data());
+            deleted.erase(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
 
         while (relevant_number < relevant.size())
         {
-            HSG::Add(index, *iterator, train[*iterator].data());
-            deleted_relevant.erase(*iterator);
+            HSG::Add(index, relevant[relevant_number], train[relevant[relevant_number]].data());
+            deleted.erase(relevant[relevant_number]);
             ++relevant_number;
-            ++iterator;
         }
 
         uint64_t total_hit = 0;
@@ -281,8 +274,7 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
             auto query_result = HSG::Search(index, test[i].data(), k, search_magnification);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result,
-                                          deleted_relevant, k);
+            auto hit = verify_with_delete(train, test[i], neighbors[i], reference_answer[i], query_result, deleted, k);
             total_hit += hit;
         }
 

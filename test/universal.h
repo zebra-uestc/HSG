@@ -257,13 +257,13 @@ inline void load_deleted(const char *file_path, std::vector<uint64_t> &result)
 inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train, const std::vector<float> &test,
                                    const std::vector<uint64_t> &neighbors, const std::vector<float> &reference_answer,
                                    std::priority_queue<std::pair<float, uint64_t>> &query_result,
-                                   std::unordered_set<uint64_t> &relevant, uint64_t k)
+                                   std::unordered_set<uint64_t> &deleted, uint64_t k)
 {
     auto result = std::vector<float>(query_result.size(), 0);
 
     while (!query_result.empty())
     {
-        if (relevant.contains(query_result.top().second))
+        if (deleted.contains(query_result.top().second))
         {
             std::cout << "wrong!" << std::endl;
             std::exit(0);
@@ -274,17 +274,28 @@ inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train,
         query_result.pop();
     }
 
-    uint64_t hit = 0;
+    uint64_t index = 0;
 
-    for (auto i = 0; hit < k && i < reference_answer.size(); ++i)
+    for (auto i = 0; i < reference_answer.size(); ++i)
     {
-        if (!relevant.contains(neighbors[i]))
+        if (!deleted.contains(neighbors[i]))
         {
-            if (result[hit] <= reference_answer[i])
+            ++index;
+
+            if (index == k)
             {
-                ++hit;
+                index = i;
+                break;
             }
         }
+    }
+
+    const float max = reference_answer[index];
+    uint64_t hit = 0;
+
+    while (hit < result.size() && result[hit] < max)
+    {
+        ++hit;
     }
 
     return hit;
