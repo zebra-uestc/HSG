@@ -12,5 +12,5 @@ numactl --cpunodebind=1 --localalloc \
     ./data/${data}/reference_answer \
     ${data} \
     16 32 6 800 10 100 \
-    ./data/${data}/delete75irrelevant.binary \
+    ./data/${data}/delete50irrelevant.binary \
     ./data/${data}/save10relevant.binary
