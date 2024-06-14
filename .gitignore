@@ -16,3 +16,4 @@ reference_answer
 gnd
 *.bvecs
 *.tar.gz
+nohup.out
