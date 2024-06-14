@@ -67,6 +67,12 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
                     << std::endl;
     }
 
+    if (HSG::Connected(index) != 0)
+    {
+        std::cout << "What the FUCK!" << std::endl;
+        return;
+    }
+
     uint64_t irrelevant_number = 0;
     uint64_t relevant_number = 0;
     auto deleted = std::unordered_set<uint64_t>();
@@ -76,6 +82,14 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (irrelevant_number < irrelevant.size() / 3)
         {
             HSG::Erase(index, irrelevant[irrelevant_number]);
+            // auto c = HSG::Connected(index);
+            // if (c != 0)
+            // {
+            //     std::cout << "count - number = " << c << std::endl;
+            //     std::cout << "irrelevant number: " << irrelevant_number << std::endl;
+            //     std::cout << "irrelevant: " << irrelevant[irrelevant_number] << std::endl;
+            //     return;
+            // }
             deleted.insert(irrelevant[irrelevant_number]);
             ++irrelevant_number;
         }
@@ -83,6 +97,14 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
         while (relevant_number < relevant.size() / 3)
         {
             HSG::Erase(index, relevant[relevant_number]);
+            // auto c = HSG::Connected(index);
+            // if (c != 0)
+            // {
+            //     std::cout << "count - number = " << c << std::endl;
+            //     std::cout << "relevant number: " << relevant_number << std::endl;
+            //     std::cout << "relevant: " << irrelevant[irrelevant_number] << std::endl;
+            //     return;
+            // }
             deleted.insert(relevant[relevant_number]);
             ++relevant_number;
         }

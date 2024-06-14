@@ -693,10 +693,8 @@ namespace HSG
         whose_vector.long_edge_out.clear();
     }
 
-    inline void Erase_Mark(const Index &index, const Offset repaired_offset, std::vector<bool> &visited,
-                           std::vector<Offset> &pool, std::priority_queue<std::pair<float, ID>> &nearest_neighbors,
-                           std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>,
-                                               std::greater<>> &waiting_vectors)
+    inline void Erase_And_Get(const Index &index, const Offset repaired_offset, std::vector<bool> &visited,
+                              std::vector<Offset> &pool)
     {
         const auto &repaired_vector = index.vectors[repaired_offset];
 
@@ -720,7 +718,6 @@ namespace HSG
                 const auto &NNO = *iterator;
 
                 Get_Pool_From_SE(index, NNO, visited, pool);
-                Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
             }
 
             for (auto iterator = neighbor_vector.short_edge_out.begin();
@@ -729,7 +726,6 @@ namespace HSG
                 const auto &NNO = iterator->second;
 
                 Get_Pool_From_SE(index, NNO, visited, pool);
-                Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
             }
 
             for (auto iterator = neighbor_vector.keep_connected.begin();
@@ -738,7 +734,6 @@ namespace HSG
                 const auto &NNO = *iterator;
 
                 Get_Pool_From_SE(index, NNO, visited, pool);
-                Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
             }
         }
     }
@@ -782,9 +777,9 @@ namespace HSG
              ++iterator)
         {
             const auto &neighbor_offset = *iterator;
-            auto &vector = index.vectors[neighbor_offset];
+            auto &neighbor_vector = index.vectors[neighbor_offset];
 
-            vector.keep_connected.erase(removed_offset);
+            neighbor_vector.keep_connected.erase(removed_offset);
         }
 
         if (removed_vector.long_edge_in != U64MAX)
@@ -815,8 +810,9 @@ namespace HSG
                 std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>, std::greater<>>();
             auto pool = std::vector<Offset>();
 
-            Erase_Mark(index, repaired_offset, visited, pool, nearest_neighbors, waiting_vectors);
+            Erase_And_Get(index, repaired_offset, visited, pool);
             Get_Pool_From_SE(index, repaired_offset, visited, pool);
+            Get_Pool_From_SE(index, removed_offset, visited, pool);
             Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
 
             while (!waiting_vectors.empty())
@@ -1522,9 +1518,9 @@ namespace HSG
         Add_Long_Edges_Optimize(index, long_path, offset);
     }
 
-    inline bool Connected(const Index &index)
+    inline uint64_t Connected(const Index &index)
     {
-        auto visited = std::vector<bool>(index.count, false);
+        auto visited = std::vector<bool>(index.vectors.size(), false);
 
         visited[0] = true;
 
@@ -1588,12 +1584,7 @@ namespace HSG
             }
         }
 
-        if (number != index.count)
-        {
-            return false;
-        }
-
-        return true;
+        return index.count - number;
     }
 
 } // namespace HSG
