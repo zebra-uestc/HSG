@@ -50,9 +50,7 @@ def get_irrelevant(neighbors, train_size, percentage):
         list(non_neighbors_indices), size=k, replace=False
     )
     # 保存为二进制文件
-    while percentage != (float)(int(percentage)):
-        percentage *= 10
-    with open("delete{0}irrelevant.binary".format(int(percentage)), "wb") as file:
+    with open("delete{0}irrelevant.binary".format(int(percentage * 100)), "wb") as file:
         file.write(struct.pack("Q", k))
         for i in non_neighbors_indices:
             file.write(struct.pack("Q", i))
@@ -87,5 +85,5 @@ def get_relevant(neighbors, lower_limit):
 
 # train = bvecs("bigann_base.bvecs", 10000000)
 neighbors = ivecs("gnd/idx_10M.ivecs")
-get_irrelevant(neighbors, 10000000, 0.75)
-get_relevant(neighbors, 10)
+get_irrelevant(neighbors, 10000000, 0.5)
+get_relevant(neighbors, 100)
