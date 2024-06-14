@@ -13,4 +13,4 @@ numactl --cpunodebind=1 --localalloc \
     ${data} \
     16 32 6 800 10 100 \
     ./data/${data}/delete50irrelevant.binary \
-    ./data/${data}/save10relevant.binary
+    ./data/${data}/save100relevant.binary
