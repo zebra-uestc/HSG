@@ -39,21 +39,20 @@ def bvecs(path, n=0):
 def get_irrelevant(neighbors, train_size, percentage):
     # 将所有的邻居索引放入一个集合中
     neighbors_set = set(neighbors.flatten())
-    # print(neighbors_set)
     # 创建一个包含所有训练集索引的集合
     all_indices_set = set(np.arange(train_size))
     # 找出在训练集中但不在邻居集合中的索引
     non_neighbors_indices = all_indices_set - neighbors_set
+    print("irrelevant vectors number: {0}".format(len(non_neighbors_indices)))
     k = (int)(len(non_neighbors_indices) * percentage)
-    # 如果非邻居索引的数量大于k，那么随机选择k个
-    if len(non_neighbors_indices) > k:
-        non_neighbors_indices = np.random.choice(
-            list(non_neighbors_indices), size=k, replace=False
-        )
+    print("deleted irrelevant vectors number: {0}".format(k))
+    non_neighbors_indices = np.random.choice(
+        list(non_neighbors_indices), size=k, replace=False
+    )
     # 保存为二进制文件
     while percentage != (float)(int(percentage)):
         percentage *= 10
-    with open("delete{0}irrelevant".format(int(percentage)), "wb") as file:
+    with open("delete{0}irrelevant.binary".format(int(percentage)), "wb") as file:
         file.write(struct.pack("Q", k))
         for i in non_neighbors_indices:
             file.write(struct.pack("Q", i))
