@@ -68,19 +68,19 @@ def get_relevant(neighbors, lower_limit):
         row = np.argmin(array)
         # 从所有元素中随机抽取一个
         selected_element = random.choice(nl[row])
-        # 在neighbors集中，找到该被抽取到的元素所在行
-        rows, _ = np.where(np.asarray(nl) == selected_element)
-        for row in rows:
-            array[row] += 1
-            nl[row].remove(selected_element)
+        for row in range(0, len(neighbors)):
+            if selected_element in nl[row]:
+                array[row] += 1
+                nl[row].remove(selected_element)
     # 将所有的邻居索引放入一个集合中
     result = set()
     for i in nl:
         for j in i:
             result.add(j)
     # 保存为二进制文件
-    with open("delete{0}relevant".format(lower_limit), "wb") as file:
+    with open("save{0}relevant.binary".format(lower_limit), "wb") as file:
         file.write(struct.pack("Q", len(result)))
+        print("deleted vectors number: {0}".format(len(result)))
         for i in result:
             file.write(struct.pack("Q", i))
     file.close()
@@ -89,4 +89,4 @@ def get_relevant(neighbors, lower_limit):
 # train = bvecs("bigann_base.bvecs", 10000000)
 neighbors = ivecs("gnd/idx_10M.ivecs")
 get_irrelevant(neighbors, 10000000, 0.75)
-get_relevant(neighbors, 100)
+get_relevant(neighbors, 10)
