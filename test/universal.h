@@ -88,7 +88,7 @@ inline uint64_t verify(const std::vector<std::vector<float>> &train, const std::
         auto distance =
             Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());
 
-        if (distance <= reference_answer[99])
+        if (distance <= reference_answer[top_k - 1])
         {
             return hit;
         }
@@ -293,7 +293,7 @@ inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train,
     const float max = reference_answer[index];
     uint64_t hit = 0;
 
-    while (hit < result.size() && result[hit] < max)
+    while (hit < result.size() && hit < k && result[hit] < max)
     {
         ++hit;
     }

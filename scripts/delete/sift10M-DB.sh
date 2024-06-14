@@ -11,6 +11,6 @@ numactl --cpunodebind=0 --localalloc \
     ./data/${data}/gnd/idx_10M.ivecs \
     ./data/${data}/reference_answer \
     ${data} \
-    16 32 6 400 100 50 \
+    16 32 6 400 10 100 \
     ./data/${data}/delete75irrelevant.binary \
     ./data/${data}/save10relevant.binary

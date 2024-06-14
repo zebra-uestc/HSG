@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cmake --build build/ --config Release --target DR
+cmake --build build/clang --config Release --target DR
 # cmake --build build/gcc --config Debug --target DR
 
 data=sift10M
@@ -11,5 +11,5 @@ numactl --cpunodebind=0 --localalloc \
     ./data/${data}/gnd/idx_10M.ivecs \
     ./data/${data}/reference_answer \
     ${data} \
-    16 32 6 400 100 50 \
+    16 32 6 400 10 100 \
     ./data/${data}/save10relevant.binary
