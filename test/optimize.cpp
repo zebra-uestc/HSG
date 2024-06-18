@@ -38,10 +38,14 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
     HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
                      cover_range, build_magnification);
 
+    index.parameters.cover_range = std::numeric_limits<uint64_t>::max();
+
     for (auto i = 0; i < train.size(); ++i)
     {
         HSG::Add(index, i, train[i].data());
     }
+
+    index.parameters.cover_range = cover_range;
 
     while (true)
     {

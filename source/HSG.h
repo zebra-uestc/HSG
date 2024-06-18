@@ -693,8 +693,8 @@ namespace HSG
         whose_vector.long_edge_out.clear();
     }
 
-    inline void Erase_And_Get(const Index &index, const Offset repaired_offset, std::vector<bool> &visited,
-                              std::vector<Offset> &pool)
+    inline void Mark_And_Get(const Index &index, const Offset repaired_offset, std::vector<bool> &visited,
+                             std::vector<Offset> &pool)
     {
         const auto &repaired_vector = index.vectors[repaired_offset];
 
@@ -773,13 +773,25 @@ namespace HSG
             neighbor_vector.short_edge_out.erase(temporary_iterator);
         }
 
-        for (auto iterator = removed_vector.keep_connected.begin(); iterator != removed_vector.keep_connected.end();
-             ++iterator)
         {
-            const auto &neighbor_offset = *iterator;
-            auto &neighbor_vector = index.vectors[neighbor_offset];
+            const auto temporary_offset = removed_vector.short_edge_out.begin()->second;
+            auto &temporary_vector = index.vectors[temporary_offset];
 
-            neighbor_vector.keep_connected.erase(removed_offset);
+            for (auto iterator = removed_vector.keep_connected.begin(); iterator != removed_vector.keep_connected.end();
+                 ++iterator)
+            {
+                const auto &neighbor_offset = *iterator;
+                auto &neighbor_vector = index.vectors[neighbor_offset];
+
+                neighbor_vector.keep_connected.erase(removed_offset);
+
+                if (neighbor_offset != temporary_offset && !neighbor_vector.short_edge_in.contains(temporary_offset) &&
+                    !temporary_vector.short_edge_in.contains(neighbor_offset))
+                {
+                    neighbor_vector.keep_connected.insert(temporary_offset);
+                    temporary_vector.keep_connected.insert(neighbor_offset);
+                }
+            }
         }
 
         if (removed_vector.long_edge_in != U64MAX)
@@ -810,7 +822,7 @@ namespace HSG
                 std::priority_queue<std::pair<float, Offset>, std::vector<std::pair<float, Offset>>, std::greater<>>();
             auto pool = std::vector<Offset>();
 
-            Erase_And_Get(index, repaired_offset, visited, pool);
+            Mark_And_Get(index, repaired_offset, visited, pool);
             Get_Pool_From_SE(index, repaired_offset, visited, pool);
             Get_Pool_From_SE(index, removed_offset, visited, pool);
             Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
@@ -830,34 +842,37 @@ namespace HSG
                 Similarity(index, repaired_vector.data, pool, nearest_neighbors, waiting_vectors);
             }
 
-            while (nearest_neighbors.size() != 1)
+            if (!nearest_neighbors.empty())
             {
-                nearest_neighbors.pop();
-            }
+                while (1 < nearest_neighbors.size())
+                {
+                    nearest_neighbors.pop();
+                }
 
-            const auto &TO = nearest_neighbors.top().second;
-            auto &TV = index.vectors[TO];
+                const auto &TO = nearest_neighbors.top().second;
+                auto &TV = index.vectors[TO];
 
-            repaired_vector.short_edge_out.insert(nearest_neighbors.top());
-            TV.short_edge_in.insert(repaired_offset);
+                repaired_vector.short_edge_out.insert(nearest_neighbors.top());
+                TV.short_edge_in.insert(repaired_offset);
 
-            if (repaired_vector.keep_connected.contains(TO))
-            {
-                repaired_vector.keep_connected.erase(TO);
-                TV.keep_connected.erase(repaired_offset);
-            }
+                if (repaired_vector.keep_connected.contains(TO))
+                {
+                    repaired_vector.keep_connected.erase(TO);
+                    TV.keep_connected.erase(repaired_offset);
+                }
 
-            if (TV.long_edge_in == repaired_offset)
-            {
-                repaired_vector.long_edge_out.erase(TO);
-                TV.long_edge_in = U64MAX;
-                Transfer_LEO(index, TO, repaired_offset);
-            }
-            else if (repaired_vector.long_edge_in == TO)
-            {
-                TV.long_edge_out.erase(repaired_offset);
-                repaired_vector.long_edge_in = U64MAX;
-                Transfer_LEO(index, repaired_offset, TO);
+                if (TV.long_edge_in == repaired_offset)
+                {
+                    repaired_vector.long_edge_out.erase(TO);
+                    TV.long_edge_in = U64MAX;
+                    Transfer_LEO(index, TO, repaired_offset);
+                }
+                else if (repaired_vector.long_edge_in == TO)
+                {
+                    TV.long_edge_out.erase(repaired_offset);
+                    repaired_vector.long_edge_in = U64MAX;
+                    Transfer_LEO(index, repaired_offset, TO);
+                }
             }
         }
 
@@ -1406,7 +1421,7 @@ namespace HSG
             {
                 long_path.push_back(waiting_vectors.top());
 
-                const auto &processing_offset = waiting_vectors.top().second;
+                const auto processing_offset = waiting_vectors.top().second;
 
                 Get_Pool_From_SE(index, processing_offset, visited, pool);
                 Similarity_Optimize(index, vector.data, pool, waiting_vectors);

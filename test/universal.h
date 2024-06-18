@@ -252,6 +252,8 @@ inline void load_deleted(const char *file_path, std::vector<uint64_t> &result)
         file.read((char *)&temporary, sizeof(uint64_t));
         result.push_back(temporary);
     }
+
+    file.close();
 }
 
 inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train, const std::vector<float> &test,
@@ -293,7 +295,7 @@ inline uint64_t verify_with_delete(const std::vector<std::vector<float>> &train,
     const float max = reference_answer[index];
     uint64_t hit = 0;
 
-    while (hit < result.size() && hit < k && result[hit] < max)
+    while (hit < result.size() && hit < k && result[hit] <= max)
     {
         ++hit;
     }
