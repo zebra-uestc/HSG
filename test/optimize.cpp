@@ -14,8 +14,8 @@ std::vector<std::vector<uint64_t>> neighbors;
 std::vector<std::vector<float>> reference_answer;
 std::string name;
 
-void base_test(const uint64_t short_edge_lower_limit, const uint64_t cover_range, const uint64_t build_magnification,
-               const uint64_t k, const uint64_t search_magnification)
+void DB(const uint64_t short_edge_lower_limit, const uint64_t cover_range, const uint64_t build_magnification,
+        const uint64_t k, const uint64_t search_magnification)
 {
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     auto k = std::stoull(argv[10]);
     auto search_magnification = std::stoull(argv[11]);
 
-    base_test(short_edge_lower_limit, cover_range, build_magnification, k, search_magnification);
+    DB(short_edge_lower_limit, cover_range, build_magnification, k, search_magnification);
 
     return 0;
 }
