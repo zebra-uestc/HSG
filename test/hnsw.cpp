@@ -142,6 +142,7 @@ int main(int argc, char **argv)
 
     std::vector<uint64_t> Ms{4, 8, 12, 16, 24, 36, 48, 64, 96};
     std::vector<uint64_t> ef_constructions{500};
+
     done_number += Ms.size() * ef_constructions.size();
 
     for (auto &M : Ms)
