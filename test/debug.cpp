@@ -13,11 +13,11 @@ std::vector<std::vector<float>> test;
 std::vector<std::vector<uint64_t>> neighbors;
 std::vector<std::vector<float>> reference_answer;
 
-void base_test(uint64_t short_edge_lower_limit, uint64_t short_edge_upper_limit, uint64_t cover_range,
-               uint64_t build_magnification, uint64_t top_k, uint64_t search_magnification)
+void base_test(uint64_t short_edge_lower_limit, uint64_t cover_range, uint64_t build_magnification, uint64_t top_k,
+               uint64_t search_magnification)
 {
-    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
-                     cover_range, build_magnification);
+    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, cover_range,
+                     build_magnification);
 
     for (auto i = 0; i < train.size(); ++i)
     {
@@ -91,8 +91,7 @@ int main(int argc, char **argv)
     auto top_k = std::stoull(argv[9]);
     auto search_magnification = std::stoull(argv[10]);
 
-    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, top_k,
-              search_magnification);
+    base_test(short_edge_lower_limit, cover_range, build_magnification, top_k, search_magnification);
 
     return 0;
 }

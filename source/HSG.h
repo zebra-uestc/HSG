@@ -63,17 +63,14 @@ namespace HSG
         uint64_t magnification;
         // 短边数量下限
         uint64_t short_edge_lower_limit;
-        // 短边数量上限
-        uint64_t short_edge_upper_limit;
         // 覆盖范围
         uint64_t cover_range;
 
         explicit Index_Parameters(const uint64_t dimension, const Space::Metric space_metric,
                                   const uint64_t magnification, const uint64_t short_edge_lower_limit,
-                                  const uint64_t short_edge_upper_limit, const uint64_t cover_range)
+                                  const uint64_t cover_range)
             : dimension(dimension), space_metric(space_metric), magnification(magnification),
-              short_edge_lower_limit(short_edge_lower_limit), short_edge_upper_limit(short_edge_upper_limit),
-              cover_range(cover_range)
+              short_edge_lower_limit(short_edge_lower_limit), cover_range(cover_range)
         {
         }
     };
@@ -104,8 +101,8 @@ namespace HSG
         std::unordered_map<ID, Offset> id_to_offset;
 
         explicit Index(const Space::Metric space, const uint64_t dimension, const uint64_t short_edge_lower_limit,
-                       const uint64_t short_edge_upper_limit, const uint64_t cover_range, const uint64_t magnification)
-            : parameters(dimension, space, magnification, short_edge_lower_limit, short_edge_upper_limit, cover_range),
+                       const uint64_t cover_range, const uint64_t magnification)
+            : parameters(dimension, space, magnification, short_edge_lower_limit, cover_range),
               similarity(Space::get_similarity(space)), count(1), zero(dimension, 0.0)
         {
             this->vectors.push_back(Vector(U64MAX, 0, this->zero.data(), 0));

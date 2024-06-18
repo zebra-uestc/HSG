@@ -15,8 +15,8 @@ std::vector<std::vector<float>> reference_answer;
 std::string name;
 std::vector<uint64_t> relevant;
 
-void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_upper_limit, const uint64_t cover_range,
-               const uint64_t build_magnification, const uint64_t k, const uint64_t search_magnification)
+void base_test(const uint64_t short_edge_lower_limit, const uint64_t cover_range, const uint64_t build_magnification,
+               const uint64_t k, const uint64_t search_magnification)
 {
     auto time = std::time(nullptr);
     auto UTC_time = std::gmtime(&time);
@@ -30,15 +30,14 @@ void base_test(const uint64_t short_edge_lower_limit, const uint64_t short_edge_
                 << UTC_time->tm_hour + 8 << "时" << UTC_time->tm_min << "分" << UTC_time->tm_sec << "秒" << std::endl;
 
     test_result << std::format("short edge lower limit: {0:<4}", short_edge_lower_limit) << std::endl;
-    test_result << std::format("short edge upper limit: {0:<4}", short_edge_upper_limit) << std::endl;
     test_result << std::format("cover range: {0:<4}", cover_range) << std::endl;
     test_result << std::format("build magnification: {0:<4}", build_magnification) << std::endl;
     test_result << std::format("top k: {0:<4}", k) << std::endl;
     test_result << std::format("search magnification: {0:<4}", search_magnification) << std::endl;
     test_result << std::format("relevant number: {0:<9}", relevant.size()) << std::endl;
 
-    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, short_edge_upper_limit,
-                     cover_range, build_magnification);
+    HSG::Index index(Space::Metric::Euclidean2, train[0].size(), short_edge_lower_limit, cover_range,
+                     build_magnification);
 
     for (auto i = 0; i < train.size(); ++i)
     {
@@ -292,8 +291,7 @@ int main(int argc, char **argv)
     auto k = std::stoull(argv[10]);
     auto search_magnification = std::stoull(argv[11]);
 
-    base_test(short_edge_lower_limit, short_edge_upper_limit, cover_range, build_magnification, k,
-              search_magnification);
+    base_test(short_edge_lower_limit, cover_range, build_magnification, k, search_magnification);
 
     return 0;
 }
