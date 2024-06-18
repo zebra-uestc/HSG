@@ -220,7 +220,6 @@ int main(int argc, char **argv)
     for (auto a = 0; a < short_edge_lower_limits.size(); ++a)
     {
         auto &short_edge_lower_limit = short_edge_lower_limits[a];
-        auto &short_edge_upper_limit = short_edge_upper_limits[a];
 
         for (auto b = 0; b < cover_ranges.size(); ++b)
         {

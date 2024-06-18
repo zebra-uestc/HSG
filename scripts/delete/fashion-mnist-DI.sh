@@ -11,5 +11,5 @@ numactl --cpunodebind=0 --localalloc \
     ./data/${data}/neighbors \
     ./data/${data}/reference_answer \
     ${data} \
-    4 8 5 100 10 100 \
+    4 8 4 50 10 100 \
     ./data/${data}/delete50irrelevant.binary

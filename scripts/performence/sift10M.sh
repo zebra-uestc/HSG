@@ -7,8 +7,8 @@ data=sift10M
 LL=(8 16 32)
 UL=(16 32 64)
 CR=(4 5 6 7)
-K=100
-BM=(400 800)
+K=10
+BM=(100 200 400 800)
 
 numactl --cpunodebind=1 --localalloc \
     ./binary/release/performence \
@@ -26,12 +26,11 @@ numactl --cpunodebind=1 --localalloc \
 
 for l in ${LL[*]}
 do
-    u=$(( 2 * ${l} ))
     for c in ${CR[*]}
     do
         for b in ${BM[*]}
         do
-            cat result/HSG/${data}-${l}-${u}-${c}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
+            cat result/HSG/${data}-${l}-${c}-${b}.txt | grep hit >> result/HSG/HSG-${data}.txt
         done
     done
 done
