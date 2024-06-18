@@ -66,10 +66,10 @@ void test_hnsw(uint64_t M, uint64_t ef_construction)
         for (int i = 0; i < test.size(); ++i)
         {
             auto begin = std::chrono::high_resolution_clock::now();
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test[i].data(), 100);
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test[i].data(), 10);
             auto end = std::chrono::high_resolution_clock::now();
             total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-            total_hit += verify(train, test[i], reference_answer[i], result);
+            total_hit += verify(train, test[i], reference_answer[i], result, 10);
         }
 
         test_result << std::format("ef: {0:<4} total hit: {1:<10} average time: {2:<10}us", ef, total_hit,

@@ -83,7 +83,7 @@ inline uint64_t verify(const std::vector<std::vector<float>> &train, const std::
         query_result.pop();
     }
 
-    for (uint64_t hit = top_k; !query_result.empty(); --hit)
+    for (uint64_t hit = query_result.size(); !query_result.empty(); --hit)
     {
         auto distance =
             Space::Euclidean2::distance(test.data(), train[query_result.top().second].data(), train[0].size());
