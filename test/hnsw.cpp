@@ -16,7 +16,7 @@ std::vector<std::vector<uint64_t>> neighbors;
 std::vector<std::vector<float>> reference_answer;
 std::string name;
 
-auto available_thread = std::counting_semaphore<>(12);
+auto available_thread = std::counting_semaphore<>(0);
 auto done_semaphore = std::counting_semaphore<>(1);
 uint64_t done_thread = 0;
 uint64_t done_number = 0;
@@ -105,14 +105,34 @@ int main(int argc, char **argv)
 
     name = std::string(argv[5]);
 
-    if (name == "sift1B")
+    if (name == "sift10M")
     {
+        for (auto i = 0; i < 6; ++i)
+        {
+            available_thread.release();
+        }
+
         bvecs_vectors(argv[1], train, 10000000);
         bvecs_vectors(argv[2], test);
         ivecs(argv[3], neighbors);
     }
     else
     {
+        if (name == "gist")
+        {
+            for (auto i = 0; i < 9; ++i)
+            {
+                available_thread.release();
+            }
+        }
+        else
+        {
+            for (auto i = 0; i < 12; ++i)
+            {
+                available_thread.release();
+            }
+        }
+
         train = load_vector(argv[1]);
         test = load_vector(argv[2]);
         neighbors = load_neighbors(argv[3]);
